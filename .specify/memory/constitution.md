@@ -1,9 +1,8 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (unversioned template) → 1.0.0 → 1.0.1 → 1.1.0
-Bump type: MINOR (initial population) + PATCH (LangChain/LangGraph V1+ constraint) +
-          MINOR (Developer Workflow section added — make mandatory)
+Version change: (unversioned template) → 1.0.0 → 1.0.1
+Bump type: MINOR (initial population) + PATCH (LangChain/LangGraph V1+ constraint made explicit)
 
 Added sections:
   - Core Principles I–V (OOP-First, LangChain-First, TDD, Zero Hardcode, Extensibility by Design)
@@ -55,7 +54,7 @@ Before writing any code, the LangChain MCP MUST be consulted to verify whether a
 function, or integration already satisfies the requirement.
 
 - If one exists → it MUST be used as-is, without adaptation or substitution by another framework.
-- Only when no native option exists MAY code be developed from scratch.
+- Only when no native option exists MAY code be developed from scratch or use another framework or libery.
 
 This rule covers: chains, retrievers, callbacks, loaders, splitters, memory, agents, tools,
 output parsers, and any other LangChain/LangGraph component.
@@ -172,35 +171,6 @@ pytest-mock `^3.14.0`
 include an `org_id` nullable column from day one to enable V2 multi-tenant activation without
 schema migration. `user_id` MUST NEVER be used as a global-scope identifier.
 
-## Developer Workflow
-
-`make` is the mandatory interface for all development tasks. Every developer and every agent
-MUST use `make` targets instead of invoking `uv`, `pytest`, or other tools directly. This
-ensures a consistent, self-documenting workflow regardless of who is running the commands.
-
-A `Makefile` MUST exist at the repository root and MUST define at minimum the following targets:
-
-| Target | Command | Purpose |
-|--------|---------|---------|
-| `make sync` | `uv sync` | Install / update all dependencies |
-| `make run` | `uv run python main.py` | Run the application |
-| `make test` | `uv run pytest` | Run the full test suite |
-| `make cov` | `uv run pytest --cov --cov-report=term-missing` | Run tests with coverage report |
-| `make generate` | `uv run python -m src.dataset.generate` | Generate synthetic datasets |
-| `make evaluate` | `uv run python -m src.evaluator.run` | Run evaluation against configured bots |
-| `make lint` | `uv run ruff check .` | Lint the codebase |
-| `make format` | `uv run ruff format .` | Format the codebase |
-
-Rules:
-- The `Makefile` MUST be kept in sync with the project — new entry points MUST get a target.
-- `make help` SHOULD print a description of all available targets.
-- CI/CD pipelines MUST call `make` targets, never raw tool commands, to stay consistent
-  with the local developer experience.
-
-**Rationale**: `make` provides a universal, toolchain-agnostic interface. New team members and
-agents can discover all available operations via `make help` without reading internal tooling
-docs. It also decouples CI/CD scripts from the specific runner (`uv`, `poetry`, etc.).
-
 ## Quality Gates
 
 Every feature MUST pass all applicable gates before being considered complete:
@@ -247,4 +217,4 @@ reference to the violated principle and why no simpler path exists.
 
 **Runtime guidance**: See `CLAUDE.md` for agent-specific runtime instructions.
 
-**Version**: 1.1.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-06-22
+**Version**: 1.0.1 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-06-22
