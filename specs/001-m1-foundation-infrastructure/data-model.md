@@ -61,7 +61,10 @@ Represents a named collection in the Qdrant vector store.
 - `name` must match `^[a-zA-Z0-9_-]+$`; invalid names raise `VectorStoreError`
 - `embedding_model` and `embedding_dimensions` are global V1 values — all collections share
   the same model (FR-008, confirmed in Clarifications 2026-06-25)
-- Collection is created automatically if absent; reused if exists (FR-008)
+- Collection is created automatically if absent; reused if exists with matching dimensions (FR-008)
+- If an existing collection has **different** `embedding_dimensions` than the global config value,
+  `VectorStoreError` is raised immediately — dimension mismatch corrupts semantic search silently;
+  caller must use a distinct collection name per embedding configuration (FR-008)
 
 **State**: The `QdrantVectorStoreProvider` maintains an internal cache of provisioned
 `VectorCollection` names to avoid redundant collection checks (Singleton principle, FR-009).
@@ -93,7 +96,23 @@ Represents a ready-to-use language model handle that implements `DeepEvalBaseLLM
 | `openrouter` | `ChatOpenRouter` | `langchain-openrouter` |
 
 **Extension rule**: Adding a new provider requires only a new `LLMProviderBase` subclass and
-registration in `LLMProviderFactory._registry`. Zero changes to existing code (SC-006).
+registration via `LLMProviderFactory.register()`. Zero changes to existing code (SC-006).
+
+---
+
+### TokenUsage
+
+> **Conditional type** — defined only if no native equivalent exists in the installed `deepeval` package (see T036a). If a native type is found, that type is used instead and this entry describes its expected shape.
+
+Represents token consumption for a single LLM call, returned alongside the generated text.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `input_tokens` | `int` | Tokens consumed by the prompt |
+| `output_tokens` | `int` | Tokens consumed by the completion |
+
+**Source**: `deepeval/llm/base.py` (custom definition) — or the native `deepeval` package type recorded in T036a.  
+**Export**: `deepeval/llm/__init__.py` (custom only; if native, import directly from the package).
 
 ---
 
@@ -118,6 +137,11 @@ Represents a structured single bot interaction trace read from Langfuse.
 - Empty result set (no traces match) returns `[]` without error (FR-013)
 
 **State**: Read-only value object. Not persisted by this system (traces live in Langfuse).
+
+> **Why no `org_id`**: `TraceRecord` is a transient read-model mapped from the Langfuse API
+> response — it is never written to our database. The `org_id` requirement (constitution Gate 7)
+> applies only to records persisted in our relational store. `EvaluationResult` is the record
+> that gets persisted and it carries `org_id` (FR-016).
 
 ---
 
@@ -146,6 +170,11 @@ Represents a persisted evaluation record in the relational database (Supabase).
 - DB write failure raises `RepositoryError` — no silent data loss (FR-017)
 
 **Database table**: `evaluation_results` (Supabase)
+
+**Authoritative schema source**: `migrations/001_evaluation_results.sql` (committed to repo).
+The DDL below is the canonical reference — the migration file MUST match it exactly.
+Apply via `psql $DATABASE_URL -f migrations/001_evaluation_results.sql` or `supabase db push`.
+Do NOT apply schema through the Supabase SQL editor (untracked, violates constitution Gate 7).
 
 **Schema** (Supabase SQL):
 ```sql
@@ -206,5 +235,5 @@ EvaluationResult
 | `TelemetryEvent` | `observability` | `deepeval/observability/langfuse_client.py` |
 | `VectorCollection` | `vector_store` | `deepeval/vector_store/qdrant_provider.py` |
 | `LLMProviderInstance` | `llm` | `deepeval/llm/base.py` + `deepeval/llm/factory.py` |
-| `TraceRecord` | `repositories` | `deepeval/repositories/trace_repository.py` |
-| `EvaluationResult` | `repositories` | `deepeval/repositories/evaluation_repository.py` |
+| `TraceRecord` | `repositories` | `deepeval/repositories/models.py` |
+| `EvaluationResult` | `repositories` | `deepeval/repositories/models.py` |

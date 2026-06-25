@@ -275,7 +275,11 @@ print('Persistence round-trip: OK')
 
 ## Full Round-Trip (SC-005)
 
-After all six scenarios pass individually, run the end-to-end scenario:
+After all six scenarios pass individually, run the end-to-end scenario.
+
+> **M1 scope note**: "run evaluation" in SC-005 means scoring via `LLMProviderFactory` + `generate()`.
+> Full DeepEval metric invocation (`AnswerRelevancyMetric`, etc.) is out of scope for M1 — it will
+> be wired in a future milestone once the evaluation pipeline is implemented.
 
 ```bash
 uv run python -c "

@@ -5,7 +5,10 @@ This file is a CONTRACT SPECIFICATION, not implementation.
 """
 from __future__ import annotations
 
-from deepeval_contracts_config_manager import TelemetryEvent  # type: ignore[import]
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from deepeval.observability.langfuse_client import TelemetryEvent
 
 
 class LangfuseClientContract:
@@ -32,10 +35,27 @@ class LangfuseClientContract:
 
     def submit(self, event: TelemetryEvent) -> None:
         """
-        Queue `event` for async export to the observability platform.
+        Queue `event` for async export to the observability platform via langfuse.trace().
+
+        SDK mapping (FR-007a):
+            langfuse.trace(
+                id=event.trace_id,          # None → new trace; set → updates existing
+                name=event.name,
+                session_id=event.session_id,
+                input=event.input,
+                output=event.output,
+                metadata=event.metadata,
+                start_time=event.start_time,
+                end_time=event.end_time,
+            )
+
+        No span(), generation(), or event() primitives are used in M1.
 
         If the platform is temporarily unreachable, logs a warning and continues —
         retry is delegated to the Langfuse SDK's built-in mechanism (FR-007).
+
+        If is_connected() is False (SDK failed to initialise), logs a WARNING and
+        returns immediately without invoking the SDK — no exception is raised (FR-007b).
         """
         ...
 
@@ -54,4 +74,9 @@ class LangfuseClientContract:
 
 
 class LangfuseError(Exception):
-    """Raised when the Langfuse connection cannot be established."""
+    """Reserved public exception for future milestones.
+
+    Not raised internally in M1 — both __init__() and submit() log WARNING
+    and continue per FR-007. Exported as public API for callers in future
+    milestones that may need to catch connection failures explicitly.
+    """

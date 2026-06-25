@@ -8,3 +8,21 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Tools
+.DS_Store
+*.tmp
+*.swp
+.idea/
+.vscode/

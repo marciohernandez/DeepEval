@@ -23,7 +23,7 @@ ConfigManager and zero hardcoded values.
 - `langchain-qdrant` — QdrantVectorStoreProvider (LangChain-first, Principle II)
 - `langchain-openai` — OpenAIProvider + OpenAIEmbeddings
 - `langchain-anthropic` — AnthropicProvider
-- `langchain-openrouter` — OpenRouterProvider (dedicated integration, not base_url workaround)
+- `langchain-openrouter ^0.2` — OpenRouterProvider (dedicated integration, not base_url workaround; verified on PyPI at 0.2.4, requires `langchain-core>=1.4.7` — compatible with `langchain ^1.x`)
 - `supabase ^2.0.0` — EvaluationRepository
 - `deepeval ^4.0.6` — DeepEvalBaseLLM interface for LLMProviderBase
 - `pytest ^8.0.0`, `pytest-cov ^5.0.0`, `pytest-asyncio ^0.23.0`, `pytest-mock ^3.14.0`
@@ -43,7 +43,7 @@ ensures no repeated I/O on config/connection setup.
 
 **Constraints**:
 - Zero hardcoded credentials (Principle IV)
-- Single Singleton instance per process for ConfigManager, LangfuseClient, QdrantClient
+- Single Singleton instance per process for ConfigManager, LangfuseClient, QdrantVectorStoreProvider
 - LangChain-first: native integrations used for Qdrant, OpenAI, Anthropic, OpenRouter (Principle II)
 - Tests written before production code (Principle III)
 - DeepEvalBaseLLM interface required for all LLM providers (FR-010)
@@ -56,12 +56,12 @@ ensures no repeated I/O on config/connection setup.
 
 | Gate | Pre-design Status | Post-design Status |
 |------|------------------|--------------------|
-| 1. TDD compliance | PLANNED — tasks.md will encode RED→GREEN→REFACTOR order | PLANNED |
-| 2. Coverage ≥ 80% | PLANNED — enforced via pytest-cov --cov-fail-under=80 | PLANNED |
+| 1. TDD compliance | PLANNED — tasks.md will encode RED→GREEN→REFACTOR order | CONFIRMED — tasks.md encodes RED→GREEN→REFACTOR order throughout all phases; test tasks precede implementation tasks in every phase |
+| 2. Coverage ≥ 80% | PLANNED — enforced via pytest-cov --cov-fail-under=80 | CONFIRMED — enforced via T004 `[tool.pytest.ini_options]` addopts and T055 full-suite gate |
 | 3. Zero hardcode | PASS — all credentials in .env via ConfigManager; none in source | PASS |
 | 4. Pattern compliance | PASS — Singleton, Factory Method, Repository applied correctly per constitution | PASS |
 | 5. LangChain-first | PASS — MCP consulted; QdrantVectorStore, ChatOpenAI, ChatAnthropic, ChatOpenRouter all used | PASS |
-| 6. Config completeness | PLANNED — .env.example to be created in implementation; ConfigManager sole reader | PLANNED |
+| 6. Config completeness | PLANNED — .env.example to be created in implementation; ConfigManager sole reader | CONFIRMED — T006 creates `.env.example` with all 14 M1 keys; T059 enforces ConfigManager-only imports |
 | 7. Org-id readiness | PASS — EvaluationResult has nullable org_id; always included in inserts | PASS |
 
 **Gate 5 detail** (LangChain MCP findings):
@@ -69,7 +69,9 @@ ensures no repeated I/O on config/connection setup.
 - `langchain_openai.ChatOpenAI` exists → MUST use internally in OpenAIProvider
 - `langchain_anthropic.ChatAnthropic` exists → MUST use internally in AnthropicProvider
 - `langchain_openrouter.ChatOpenRouter` exists → MUST use for OpenRouter (NOT `ChatOpenAI + base_url`)
-  - LangChain docs explicitly: "For OpenRouter, prefer the dedicated integration `ChatOpenRouter`"
+  - LangChain docs explicitly warn: "For OpenRouter, prefer the dedicated integration `ChatOpenRouter`"
+  - Package verified on PyPI: `langchain-openrouter 0.2.4` (latest), requires `langchain-core>=1.4.7,<2.0.0`
+  - The `^1.x` constitution constraint applies to core `langchain`/`langgraph` packages only; integration packages (`langchain-openrouter`, etc.) follow their own versioning — `0.2.x` is stable and LangChain-core-compatible
 - `langchain_openai.OpenAIEmbeddings` exists → MUST use for Qdrant embedding model
 
 **No gate violations.** No complexity tracking required.
@@ -106,7 +108,7 @@ deepeval/                          # Main package
 │   └── langfuse_client.py         # LangfuseClient (Singleton) + TelemetryEvent
 ├── vector_store/
 │   ├── __init__.py
-│   └── qdrant_provider.py         # QdrantVectorStoreProvider (Singleton/Factory) + VectorStoreError
+│   └── qdrant_provider.py         # QdrantVectorStoreProvider (Singleton) + VectorStoreError
 ├── llm/
 │   ├── __init__.py
 │   ├── base.py                    # LLMProviderBase (ABC, implements DeepEvalBaseLLM)
@@ -124,6 +126,9 @@ config/                            # Non-sensitive config (versioned)
 ├── settings.yaml                  # embedding.model, embedding.dimensions, etc.
 ├── bots.yaml                      # Bot config (stub for M1)
 └── personas.yaml                  # Personas (stub for M1)
+
+migrations/                        # Versioned SQL migrations (committed, never manual)
+└── 001_evaluation_results.sql     # DDL for evaluation_results table (Supabase/Postgres)
 
 tests/
 ├── conftest.py                    # Shared fixtures: mock ConfigManager, mock env

@@ -150,8 +150,10 @@ Flowise (self-hosted)
 - Relational V2+: PostgreSQL self-hosted on VPS (swapped via Repository pattern + `DB_PROVIDER`)
 - Vector: Qdrant `^1.18.0` client (server: self-hosted on VPS, API key required)
 
-**LLM Providers**: OpenAI `>=1.30.0`, Anthropic `>=0.30.0`, OpenRouter (via OpenAI SDK with
-alternate `base_url`) — all accessed through `LLMProviderBase` / `LLMProviderFactory`
+**LLM Providers**: OpenAI `>=1.30.0`, Anthropic `>=0.30.0`, OpenRouter via `langchain-openrouter`
+(`ChatOpenRouter`) — all accessed through `LLMProviderBase` / `LLMProviderFactory`. The
+`ChatOpenAI + base_url` workaround for OpenRouter MUST NOT be used; the dedicated LangChain
+integration is required (Principle II).
 
 **Backend API**: FastAPI `^0.115.0` + Uvicorn
 
@@ -185,8 +187,11 @@ Every feature MUST pass all applicable gates before being considered complete:
    the LangChain MCP was consulted before writing the implementation.
 6. **Config completeness** — `.env.example` is updated for every new environment variable
    introduced; `ConfigManager` is the only reader.
-7. **Org-id readiness** (persistence tasks) — Every new database table includes `org_id`
-   as a nullable column.
+7. **Org-id readiness & migration compliance** (persistence tasks) — Every new database table
+   includes `org_id` as a nullable column. Every database schema change MUST be committed as a
+   versioned SQL migration file in `migrations/` (e.g., `001_evaluation_results.sql`); no schema
+   may be applied via manual editor operations — manual steps are untrackable, unreproducible in
+   CI, and violate the TDD commit-history requirement of Gate 1.
 
 **Success criteria** (from briefing §7):
 - Any bot declared in `bots.yaml` evaluates without additional code
