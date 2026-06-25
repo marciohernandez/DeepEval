@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Langchain_1_0__query_docs_filesystem_docs_by_lang_chain"
+    ]
+  }
+}
