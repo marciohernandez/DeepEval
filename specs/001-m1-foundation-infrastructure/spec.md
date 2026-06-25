@@ -40,7 +40,7 @@ An operator running evaluations needs all evaluation runs and interactions to be
 1. **Given** valid Langfuse connection credentials in configuration, **When** the application starts, **Then** a single active connection to the observability platform is established and available system-wide.
 2. **Given** an active connection, **When** a telemetry event is submitted, **Then** the event is queued for export and eventually appears in the observability platform without manual intervention.
 3. **Given** the application is shutting down, **When** shutdown is triggered, **Then** all buffered telemetry events are flushed to the platform before the process exits.
-4. **Given** the observability platform is temporarily unreachable, **When** events are submitted, **Then** the system continues operating without crashing, and events are retried or logged with a clear warning.
+4. **Given** the observability platform is temporarily unreachable, **When** events are submitted, **Then** the system continues operating without crashing; retry and back-off are handled by the observability SDK's built-in async flush mechanism, and a warning is logged to indicate the connectivity issue.
 
 ---
 
@@ -115,7 +115,7 @@ After an evaluation run completes, all metrics, scores, and structured results n
 
 ### Edge Cases
 
-- What happens when a required configuration key exists in `.env` but has an empty value?
+- A configuration key present in `.env` or `config/*.yaml` with an empty string value is treated identically to a missing key — `ConfigManager` raises an FR-003 descriptive error naming the key and its expected source file.
 - What happens when both `.env` and `config/settings.yaml` define the same key with different values?
 - What happens when the vector store collection name contains invalid characters?
 - What happens when a Langfuse trace has no output (e.g., an interrupted session)?
@@ -128,19 +128,19 @@ After an evaluation run completes, all metrics, scores, and structured results n
 
 - **FR-001**: The system MUST provide a single, authoritative source for all configuration values loaded from `.env` and `config/*.yaml` files; no other module may read these files or environment variables directly.
 - **FR-002**: The configuration source MUST load all values exactly once per process; subsequent requests MUST return the same values without re-reading files.
-- **FR-003**: The configuration source MUST raise a descriptive error — naming the key and expected source — when a required key is absent or empty.
+- **FR-003**: The configuration source MUST raise a descriptive error — naming the key and expected source — when a required key is absent or has an empty string value; an empty string is treated identically to a missing key.
 - **FR-004**: The configuration source MUST mask sensitive values (keys, tokens, passwords) in any logging or string representation.
 - **FR-005**: The system MUST maintain a single active connection to the self-hosted observability platform per process; all telemetry consumers MUST share this connection.
 - **FR-006**: The observability connection MUST flush all buffered telemetry events before process shutdown completes.
-- **FR-007**: The system MUST continue operating when the observability platform is temporarily unreachable, logging a warning without crashing.
-- **FR-008**: The system MUST expose vector store instances for named collections through a unified interface; collections MUST be created automatically if they do not exist.
+- **FR-007**: The system MUST continue operating when the observability platform is temporarily unreachable, logging a warning without crashing; retry and back-off behaviour are delegated entirely to the observability SDK's built-in async flush mechanism — no custom retry layer is implemented.
+- **FR-008**: The system MUST expose vector store instances for named collections through a unified interface; collections MUST be created automatically if they do not exist. The embedding model and its dimensions MUST be sourced from `config/settings.yaml` via `ConfigManager` — a single global model applies to all collections in V1.
 - **FR-009**: The vector store interface MUST be natively compatible with the LangChain/LangGraph orchestration layer so evaluation workflows can use it without adaptation.
 - **FR-010**: The system MUST support instantiation of LLM provider instances for OpenAI, Anthropic, and OpenRouter through a single, unified interface.
 - **FR-011**: LLM provider instantiation MUST source all credentials and endpoint configuration from the configuration source; no credentials may be passed as direct arguments.
 - **FR-012**: The system MUST raise a descriptive error when an unsupported provider name is requested, listing supported options.
 - **FR-013**: The trace read interface MUST support querying traces by bot identifier, date range, and session identifier.
 - **FR-014**: The trace read interface MUST return structured objects with input, output, and metadata; raw API responses MUST NOT be exposed to callers.
-- **FR-015**: The evaluation persistence layer MUST write metric scores, evaluation results, and associated metadata to the relational database.
+- **FR-015**: The evaluation persistence layer MUST write metric scores, evaluation results, and associated metadata to the relational database. Each result MUST be assigned a UUID primary key generated by the application (via `uuid.uuid4()`) before the database insert, so the identifier is known to the caller without waiting for a database response.
 - **FR-016**: Every record written by the evaluation persistence layer MUST include an `org_id` field (nullable) to support future multi-tenant activation.
 - **FR-017**: The evaluation persistence layer MUST raise a clear error on write failure; silent data loss is not permitted.
 
@@ -148,10 +148,10 @@ After an evaluation run completes, all metrics, scores, and structured results n
 
 - **ConfigEntry**: A named configuration value with its source file, key name, and sensitivity classification (sensitive/non-sensitive).
 - **TelemetryEvent**: A trace or span event submitted to the observability platform, with a session identifier, timestamps, input, output, and metadata.
-- **VectorCollection**: A named collection in the vector store containing embedded documents, identified by collection name and embedding dimensions.
+- **VectorCollection**: A named collection in the vector store containing embedded documents, identified by collection name and embedding dimensions. Embedding dimensions are derived from a single global embedding model configured in `config/settings.yaml`; all collections in V1 use the same model.
 - **LLMProviderInstance**: A ready-to-use language model handle identified by provider name and model name, capable of executing completions.
 - **TraceRecord**: A structured representation of a single bot interaction trace, containing session ID, bot identifier, turn inputs/outputs, timestamps, and metadata.
-- **EvaluationResult**: A persisted evaluation record containing bot identifier, trace reference, metric name, score, pass/fail status, metadata, and `org_id`.
+- **EvaluationResult**: A persisted evaluation record containing a UUID primary key (generated by the application before insert), bot identifier, trace reference, metric name, score, pass/fail status, metadata, and `org_id`.
 
 ## Success Criteria *(mandatory)*
 
@@ -170,10 +170,20 @@ After an evaluation run completes, all metrics, scores, and structured results n
 - All external services (Langfuse, Qdrant, Supabase) are reachable from the development environment via the credentials supplied in `.env`.
 - The Langfuse instance is self-hosted on the VPS and already running; this milestone does not cover Langfuse server provisioning.
 - The Qdrant instance is self-hosted on the VPS and already running; this milestone does not cover Qdrant server provisioning.
-- The Supabase project is already created and the target schema (evaluation results table) will be created as part of this milestone.
+- The Supabase project is already created and the target schema (evaluation results table) will be created as part of this milestone. `EvaluationRepository` (V1) connects via the Supabase Python SDK (`supabase>=2.0.0`) using its table/insert/select API; the Repository pattern isolates all SDK calls within the repository so a future V2 swap to self-hosted Postgres requires changes only to `EvaluationRepository`.
 - Python `^3.11` is the minimum runtime version; `^3.13` is the pinned version for local development via `uv`.
 - OpenRouter is accessed via the OpenAI SDK using a custom `base_url`; no separate OpenRouter SDK is required.
 - Multi-tenancy is out of scope for M1; `org_id` is included as a nullable column to avoid a future schema migration, not to enforce tenant isolation.
 - Configuration merging priority (if a key appears in both `.env` and YAML): `.env` takes precedence over YAML — this is the standard dotenv convention.
 - The `config/` directory structure (`settings.yaml`, `bots.yaml`, `personas.yaml`) exists or will be created as part of this milestone.
 - Mobile or web-facing interfaces are out of scope for M1; this milestone is back-end infrastructure only.
+
+## Clarifications
+
+### Session 2026-06-25
+
+- Q: When a required configuration key exists but has an empty string value, should `ConfigManager` treat it as missing (raise FR-003 error) or as a valid empty string? → A: Empty string treated as missing — raise FR-003 error (same path as absent key).
+- Q: When Langfuse is unreachable, should `LangfuseClient` implement custom retry logic, buffer events indefinitely, discard immediately, or delegate to the SDK? → A: Delegate entirely to the Langfuse SDK's built-in async flush/retry mechanism — no custom retry layer.
+- Q: How should the embedding model for `QdrantVectorStoreProvider` be configured — global default, per-collection, or caller-provided? → A: Single global default in `config/settings.yaml`; all V1 collections use the same model and dimensions.
+- Q: What primary key strategy should `EvaluationResult` use — application-generated UUID, Supabase auto-UUID, or auto-increment? → A: Application-generated UUID (`uuid.uuid4()`) before insert; ID is known to the caller without a DB round-trip.
+- Q: Should `EvaluationRepository` (V1) use the Supabase Python SDK, a raw PostgreSQL driver, or SQLAlchemy? → A: Supabase Python SDK (`supabase>=2.0.0`) for V1; Repository pattern isolates the SDK so V2 Postgres swap touches only the repository.
