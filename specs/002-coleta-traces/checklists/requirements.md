@@ -6,7 +6,7 @@
 
 ## Content Quality
 
-- [x] No implementation details (languages, frameworks, APIs)
+- [ ] No implementation details (languages, frameworks, APIs)
 - [x] Focused on user value and business needs
 - [x] Written for non-technical stakeholders
 - [x] All mandatory sections completed
@@ -27,8 +27,14 @@
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
-- [x] No implementation details leak into specification
+- [ ] No implementation details leak into specification
 
 ## Notes
 
-All items pass. Spec is ready for `/speckit-plan`.
+14/16 items pass. Two clarification sessions on 2026-07-02 introduced Python-specific syntax
+(`list[str]`, `class BotType(str, Enum)`, `ValueError`, `__init__`) into FR-005, FR-010,
+and Key Entities — design decisions that belong in the plan, not the spec. To restore full
+checklist passage, abstract those sections back to language-agnostic descriptions before
+running `/speckit-plan`. All edge cases (None/empty bot type, start_date > end_date,
+500-cap truncation) are now formally resolved. Retry policy and observability signals
+(FR-012) are defined.
