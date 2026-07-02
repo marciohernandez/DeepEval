@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import atexit
 import logging
+import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import ClassVar
 
 from langfuse import Langfuse
+from langfuse.api.ingestion.types import IngestionEvent_TraceCreate, TraceBody
 
 from deepeval.config.config_manager import ConfigManager
 
@@ -17,13 +19,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TelemetryEvent:
     session_id: str
-    trace_id: str | None
     name: str
     input: dict | str | None
     output: dict | str | None
     metadata: dict
     start_time: datetime | None
-    end_time: datetime | None
+    trace_id: str | None = None
+    end_time: datetime | None = None
 
 
 class LangfuseError(Exception):
@@ -80,15 +82,25 @@ class LangfuseClient:
             )
             return
         try:
-            self._client.trace(  # type: ignore[union-attr]
-                id=event.trace_id,
+            now = datetime.now(timezone.utc)
+            body = TraceBody(
+                id=event.trace_id or str(uuid.uuid4()),
                 name=event.name,
                 session_id=event.session_id,
                 input=event.input,
                 output=event.output,
                 metadata=event.metadata,
-                start_time=event.start_time,
-                end_time=event.end_time,
+                timestamp=event.start_time or now,
+            )
+            self._client.api.ingestion.batch(  # type: ignore[union-attr]
+                batch=[
+                    IngestionEvent_TraceCreate(
+                        type="trace-create",
+                        id=str(uuid.uuid4()),
+                        timestamp=now.isoformat(),
+                        body=body,
+                    )
+                ]
             )
         except Exception as exc:
             logger.warning(

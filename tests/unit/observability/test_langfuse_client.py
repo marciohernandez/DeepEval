@@ -151,18 +151,17 @@ class TestSubmit:
         defaults.update(overrides)
         return TelemetryEvent(**defaults)
 
-    def test_submit_calls_sdk_trace(self, mock_config):
+    def test_submit_calls_sdk_batch(self, mock_config):
         mock_sdk = MagicMock()
         with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 client.submit(self._make_event())
-                mock_sdk.trace.assert_called_once()
+                mock_sdk.api.ingestion.batch.assert_called_once()
 
     def test_submit_passes_correct_fields(self, mock_config):
         mock_sdk = MagicMock()
         start = datetime(2026, 1, 1)
-        end = datetime(2026, 1, 2)
         with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
@@ -174,23 +173,23 @@ class TestSubmit:
                     output={"a": "ho"},
                     metadata={"bot": "tester"},
                     start_time=start,
-                    end_time=end,
                 )
                 client.submit(event)
-                mock_sdk.trace.assert_called_once_with(
-                    id="trace-999",
-                    name="my-trace",
-                    session_id="sess-999",
-                    input={"q": "hi"},
-                    output={"a": "ho"},
-                    metadata={"bot": "tester"},
-                    start_time=start,
-                    end_time=end,
-                )
+                mock_sdk.api.ingestion.batch.assert_called_once()
+                call_batch = mock_sdk.api.ingestion.batch.call_args.kwargs["batch"]
+                assert len(call_batch) == 1
+                body = call_batch[0].body
+                assert body.id == "trace-999"
+                assert body.name == "my-trace"
+                assert body.session_id == "sess-999"
+                assert body.input == {"q": "hi"}
+                assert body.output == {"a": "ho"}
+                assert body.metadata == {"bot": "tester"}
+                assert body.timestamp == start
 
     def test_submit_warning_logged_when_sdk_raises(self, mock_config, caplog):
         mock_sdk = MagicMock()
-        mock_sdk.trace.side_effect = Exception("SDK boom")
+        mock_sdk.api.ingestion.batch.side_effect = Exception("SDK boom")
         with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 with caplog.at_level(logging.WARNING):
@@ -200,7 +199,7 @@ class TestSubmit:
 
     def test_submit_no_exception_when_sdk_raises(self, mock_config):
         mock_sdk = MagicMock()
-        mock_sdk.trace.side_effect = Exception("SDK boom")
+        mock_sdk.api.ingestion.batch.side_effect = Exception("SDK boom")
         with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
@@ -216,7 +215,7 @@ class TestSubmit:
                     assert client.is_connected() is False
                     client.submit(self._make_event())  # must not raise
                 assert any(r.levelno >= logging.WARNING for r in caplog.records)
-        mock_sdk.trace.assert_not_called()
+        mock_sdk.api.ingestion.batch.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

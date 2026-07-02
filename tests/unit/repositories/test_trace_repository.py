@@ -1,6 +1,7 @@
 """Unit tests for TraceRepository (US5 — Trace Extraction for Evaluation Input)."""
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -10,24 +11,28 @@ from deepeval.repositories.models import TraceRecord
 from deepeval.repositories.trace_repository import TraceRepository, TraceRepositoryError
 
 
-def _make_raw_trace(**overrides) -> MagicMock:
-    trace = MagicMock()
-    trace.id = "trace-001"
-    trace.session_id = "sess-001"
-    trace.tags = ["my-bot"]
-    trace.input = {"text": "hello"}
-    trace.output = {"text": "world"}
-    trace.metadata = {"source": "test"}
-    trace.timestamp = datetime(2026, 1, 1, 12, 0, 0)
-    for k, v in overrides.items():
-        setattr(trace, k, v)
+def _make_raw_trace(**overrides) -> dict:
+    trace = {
+        "id": "trace-001",
+        "sessionId": "sess-001",
+        "tags": ["my-bot"],
+        "input": {"text": "hello"},
+        "output": {"text": "world"},
+        "metadata": {"source": "test"},
+        "timestamp": "2026-01-01T12:00:00",
+    }
+    trace.update(overrides)
     return trace
 
 
-def _make_langfuse_client(raw_traces: list) -> MagicMock:
-    lf_client = MagicMock()
-    lf_client._client.api.trace.list.return_value = MagicMock(data=raw_traces)
-    return lf_client
+def _mock_urlopen(traces: list) -> MagicMock:
+    """Return a MagicMock that behaves as a urllib context-manager response."""
+    body = json.dumps({"data": traces}).encode()
+    resp = MagicMock()
+    resp.read.return_value = body
+    resp.__enter__ = lambda s: s
+    resp.__exit__ = lambda s, *a: False
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -35,23 +40,15 @@ def _make_langfuse_client(raw_traces: list) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 class TestGetByBot:
-    def test_returns_list_of_trace_records(self):
-        raw = _make_raw_trace()
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_bot("my-bot")
-
+    def test_returns_list_of_trace_records(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([_make_raw_trace()])):
+            results = TraceRepository().get_by_bot("my-bot")
         assert len(results) == 1
         assert isinstance(results[0], TraceRecord)
 
-    def test_all_entity_fields_populated(self):
-        raw = _make_raw_trace()
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_bot("my-bot")
-
+    def test_all_entity_fields_populated(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([_make_raw_trace()])):
+            results = TraceRepository().get_by_bot("my-bot")
         t = results[0]
         assert t.trace_id == "trace-001"
         assert t.session_id == "sess-001"
@@ -61,43 +58,27 @@ class TestGetByBot:
         assert t.metadata == {"source": "test"}
         assert t.start_time == datetime(2026, 1, 1, 12, 0, 0)
 
-    def test_passes_tags_to_sdk(self):
-        lf_client = _make_langfuse_client([])
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = lf_client
-            repo = TraceRepository()
-            repo.get_by_bot("customer-support")
+    def test_passes_tags_to_request_url(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([])) as mock_open:
+            TraceRepository().get_by_bot("customer-support")
+        url = mock_open.call_args[0][0].full_url
+        assert "customer-support" in url
 
-        call_kwargs = lf_client._client.api.trace.list.call_args[1]
-        assert "customer-support" in call_kwargs.get("tags", [])
-
-    def test_empty_result_returns_empty_list(self):
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([])
-            repo = TraceRepository()
-            results = repo.get_by_bot("no-such-bot")
-
+    def test_empty_result_returns_empty_list(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([])):
+            results = TraceRepository().get_by_bot("no-such-bot")
         assert results == []
 
-    def test_raw_langfuse_objects_not_returned(self):
-        raw = _make_raw_trace()
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_bot("my-bot")
-
+    def test_raw_langfuse_objects_not_returned(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([_make_raw_trace()])):
+            results = TraceRepository().get_by_bot("my-bot")
         for item in results:
             assert isinstance(item, TraceRecord)
 
-    def test_sdk_raises_propagates_as_trace_repository_error(self):
-        lf_client = MagicMock()
-        lf_client._client.api.trace.list.side_effect = Exception("SDK error")
-
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = lf_client
-            repo = TraceRepository()
+    def test_http_error_propagates_as_trace_repository_error(self, mock_config):
+        with patch("urllib.request.urlopen", side_effect=Exception("HTTP error")):
             with pytest.raises(TraceRepositoryError):
-                repo.get_by_bot("my-bot")
+                TraceRepository().get_by_bot("my-bot")
 
 
 # ---------------------------------------------------------------------------
@@ -105,71 +86,45 @@ class TestGetByBot:
 # ---------------------------------------------------------------------------
 
 class TestGetBySession:
-    def test_returns_list_of_trace_records(self):
-        raw = _make_raw_trace()
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_session("sess-001")
-
+    def test_returns_list_of_trace_records(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([_make_raw_trace()])):
+            results = TraceRepository().get_by_session("sess-001")
         assert len(results) == 1
         assert isinstance(results[0], TraceRecord)
 
-    def test_returns_matching_traces(self):
-        raw = _make_raw_trace(session_id="sess-abc")
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_session("sess-abc")
-
+    def test_returns_matching_traces(self, mock_config):
+        raw = _make_raw_trace(sessionId="sess-abc")
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([raw])):
+            results = TraceRepository().get_by_session("sess-abc")
         assert results[0].session_id == "sess-abc"
 
-    def test_passes_session_id_to_sdk(self):
-        lf_client = _make_langfuse_client([])
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = lf_client
-            repo = TraceRepository()
-            repo.get_by_session("my-session")
+    def test_passes_session_id_to_request_url(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([])) as mock_open:
+            TraceRepository().get_by_session("my-session")
+        url = mock_open.call_args[0][0].full_url
+        assert "my-session" in url
 
-        call_kwargs = lf_client._client.api.trace.list.call_args[1]
-        assert call_kwargs.get("session_id") == "my-session"
-
-    def test_empty_result_returns_empty_list(self):
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([])
-            repo = TraceRepository()
-            results = repo.get_by_session("nonexistent-session")
-
+    def test_empty_result_returns_empty_list(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([])):
+            results = TraceRepository().get_by_session("nonexistent-session")
         assert results == []
 
-    def test_raw_langfuse_objects_not_returned(self):
-        raw = _make_raw_trace()
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_session("sess-001")
-
+    def test_raw_langfuse_objects_not_returned(self, mock_config):
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([_make_raw_trace()])):
+            results = TraceRepository().get_by_session("sess-001")
         for item in results:
             assert isinstance(item, TraceRecord)
 
-    def test_output_none_handled_for_interrupted_sessions(self):
+    def test_output_none_handled_for_interrupted_sessions(self, mock_config):
         raw = _make_raw_trace(output=None)
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_session("sess-001")
-
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([raw])):
+            results = TraceRepository().get_by_session("sess-001")
         assert results[0].output is None
 
-    def test_sdk_raises_propagates_as_trace_repository_error(self):
-        lf_client = MagicMock()
-        lf_client._client.api.trace.list.side_effect = Exception("SDK error")
-
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = lf_client
-            repo = TraceRepository()
+    def test_http_error_propagates_as_trace_repository_error(self, mock_config):
+        with patch("urllib.request.urlopen", side_effect=Exception("HTTP error")):
             with pytest.raises(TraceRepositoryError):
-                repo.get_by_session("sess-001")
+                TraceRepository().get_by_session("sess-001")
 
 
 # ---------------------------------------------------------------------------
@@ -177,78 +132,46 @@ class TestGetBySession:
 # ---------------------------------------------------------------------------
 
 class TestGetByDateRange:
-    def test_returns_list_of_trace_records(self):
-        raw = _make_raw_trace()
-        start = datetime(2026, 1, 1)
-        end = datetime(2026, 1, 31)
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_date_range("my-bot", start, end)
-
+    def test_returns_list_of_trace_records(self, mock_config):
+        start, end = datetime(2026, 1, 1), datetime(2026, 1, 31)
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([_make_raw_trace()])):
+            results = TraceRepository().get_by_date_range("my-bot", start, end)
         assert len(results) == 1
         assert isinstance(results[0], TraceRecord)
 
-    def test_passes_timestamps_to_sdk(self):
-        start = datetime(2026, 1, 1)
-        end = datetime(2026, 1, 31)
-        lf_client = _make_langfuse_client([])
+    def test_passes_timestamps_to_request_url(self, mock_config):
+        start, end = datetime(2026, 1, 1), datetime(2026, 1, 31)
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([])) as mock_open:
+            TraceRepository().get_by_date_range("my-bot", start, end)
+        url = mock_open.call_args[0][0].full_url
+        assert "fromTimestamp" in url
+        assert "toTimestamp" in url
 
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = lf_client
-            repo = TraceRepository()
-            repo.get_by_date_range("my-bot", start, end)
+    def test_passes_bot_id_as_tag_to_request_url(self, mock_config):
+        start, end = datetime(2026, 1, 1), datetime(2026, 1, 31)
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([])) as mock_open:
+            TraceRepository().get_by_date_range("my-bot", start, end)
+        url = mock_open.call_args[0][0].full_url
+        assert "my-bot" in url
 
-        call_kwargs = lf_client._client.api.trace.list.call_args[1]
-        assert call_kwargs.get("from_timestamp") == start
-        assert call_kwargs.get("to_timestamp") == end
-
-    def test_passes_bot_id_as_tag_to_sdk(self):
-        start = datetime(2026, 1, 1)
-        end = datetime(2026, 1, 31)
-        lf_client = _make_langfuse_client([])
-
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = lf_client
-            repo = TraceRepository()
-            repo.get_by_date_range("my-bot", start, end)
-
-        call_kwargs = lf_client._client.api.trace.list.call_args[1]
-        assert "my-bot" in call_kwargs.get("tags", [])
-
-    def test_empty_result_returns_empty_list(self):
-        start = datetime(2026, 1, 1)
-        end = datetime(2026, 1, 31)
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([])
-            repo = TraceRepository()
-            results = repo.get_by_date_range("my-bot", start, end)
-
+    def test_empty_result_returns_empty_list(self, mock_config):
+        start, end = datetime(2026, 1, 1), datetime(2026, 1, 31)
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([])):
+            results = TraceRepository().get_by_date_range("my-bot", start, end)
         assert results == []
 
-    def test_raw_langfuse_objects_not_returned(self):
-        raw = _make_raw_trace()
-        start = datetime(2026, 1, 1)
-        end = datetime(2026, 1, 31)
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = _make_langfuse_client([raw])
-            repo = TraceRepository()
-            results = repo.get_by_date_range("my-bot", start, end)
-
+    def test_raw_langfuse_objects_not_returned(self, mock_config):
+        start, end = datetime(2026, 1, 1), datetime(2026, 1, 31)
+        with patch("urllib.request.urlopen", return_value=_mock_urlopen([_make_raw_trace()])):
+            results = TraceRepository().get_by_date_range("my-bot", start, end)
         for item in results:
             assert isinstance(item, TraceRecord)
 
-    def test_sdk_raises_propagates_as_trace_repository_error(self):
-        lf_client = MagicMock()
-        lf_client._client.api.trace.list.side_effect = Exception("SDK error")
-        start = datetime(2026, 1, 1)
-        end = datetime(2026, 1, 31)
-
-        with patch("deepeval.repositories.trace_repository.LangfuseClient") as mock_cls:
-            mock_cls.instance.return_value = lf_client
-            repo = TraceRepository()
+    def test_http_error_propagates_as_trace_repository_error(self, mock_config):
+        start, end = datetime(2026, 1, 1), datetime(2026, 1, 31)
+        with patch("urllib.request.urlopen", side_effect=Exception("HTTP error")):
             with pytest.raises(TraceRepositoryError):
-                repo.get_by_date_range("my-bot", start, end)
+                TraceRepository().get_by_date_range("my-bot", start, end)
 
 
 # ---------------------------------------------------------------------------

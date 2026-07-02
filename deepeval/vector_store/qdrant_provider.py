@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import ClassVar
+from urllib.parse import urlparse
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
@@ -42,11 +43,16 @@ class QdrantVectorStoreProvider:
         openai_key: str = config.get("OPENAI_API_KEY")
 
         try:
-            self._client = QdrantClient(
-                host=host,
-                port=port,
-                api_key=api_key or None,
-            )
+            if host.startswith(("http://", "https://")):
+                parsed = urlparse(host)
+                if parsed.port is None:
+                    default_port = 443 if parsed.scheme == "https" else port
+                    url = f"{host.rstrip('/')}:{default_port}"
+                else:
+                    url = host
+                self._client = QdrantClient(url=url, api_key=api_key or None)
+            else:
+                self._client = QdrantClient(host=host, port=port, api_key=api_key or None)
         except Exception as exc:
             raise VectorStoreError("Cannot connect to Qdrant") from exc
 

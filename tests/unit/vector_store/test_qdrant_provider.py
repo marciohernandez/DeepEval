@@ -191,6 +191,51 @@ class TestCollectionExists:
 
 
 # ---------------------------------------------------------------------------
+# URL-based host handling (https:// / http:// prefix)
+# ---------------------------------------------------------------------------
+
+class TestURLHostHandling:
+    def _make_config(self, mocker, host: str):
+        config = MagicMock()
+        values = {
+            "QDRANT_HOST": host,
+            "QDRANT_API_KEY": "key",
+            "OPENAI_API_KEY": "openai-key",
+            "embedding.model": "text-embedding-3-small",
+            "embedding.dimensions": "1536",
+            "qdrant.port": "6333",
+        }
+        config.get.side_effect = lambda k: values[k]
+        config.get_optional.side_effect = lambda k, default="": values.get(k, default)
+        mocker.patch("deepeval.config.config_manager.ConfigManager.instance", return_value=config)
+        return config
+
+    def test_https_host_without_port_appends_443(self, mocker):
+        self._make_config(mocker, "https://qdrant.example.com")
+        mock_client_cls = MagicMock(return_value=MagicMock())
+        with patch("deepeval.vector_store.qdrant_provider.QdrantClient", mock_client_cls):
+            with patch("deepeval.vector_store.qdrant_provider.OpenAIEmbeddings"):
+                QdrantVectorStoreProvider.instance()
+        mock_client_cls.assert_called_once_with(url="https://qdrant.example.com:443", api_key="key")
+
+    def test_https_host_with_port_uses_url_as_is(self, mocker):
+        self._make_config(mocker, "https://qdrant.example.com:8080")
+        mock_client_cls = MagicMock(return_value=MagicMock())
+        with patch("deepeval.vector_store.qdrant_provider.QdrantClient", mock_client_cls):
+            with patch("deepeval.vector_store.qdrant_provider.OpenAIEmbeddings"):
+                QdrantVectorStoreProvider.instance()
+        mock_client_cls.assert_called_once_with(url="https://qdrant.example.com:8080", api_key="key")
+
+    def test_http_host_without_port_appends_configured_port(self, mocker):
+        self._make_config(mocker, "http://qdrant.example.com")
+        mock_client_cls = MagicMock(return_value=MagicMock())
+        with patch("deepeval.vector_store.qdrant_provider.QdrantClient", mock_client_cls):
+            with patch("deepeval.vector_store.qdrant_provider.OpenAIEmbeddings"):
+                QdrantVectorStoreProvider.instance()
+        mock_client_cls.assert_called_once_with(url="http://qdrant.example.com:6333", api_key="key")
+
+
+# ---------------------------------------------------------------------------
 # Qdrant connection failures
 # ---------------------------------------------------------------------------
 

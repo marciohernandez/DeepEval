@@ -9,7 +9,7 @@ dashboard within 30 seconds (SC-007 latency SLA — manual verification only).
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -41,8 +41,8 @@ class TestLangfuseClientIntegration:
             input={"prompt": "Hello, world!"},
             output={"response": "Hi!"},
             metadata={"source": "integration-test"},
-            start_time=datetime.utcnow(),
-            end_time=datetime.utcnow(),
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc),
         )
         client.submit(event)
         client.flush()  # blocks until sent — must not raise
