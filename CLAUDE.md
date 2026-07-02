@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Early-stage Python 3.13 project named `deepeval`, scaffolded with `uv`. No dependencies or tests exist yet.
+Early-stage Python project named `deepeval`, scaffolded with `uv`. Python 3.13 pinned (`.python-version`), minimum runtime `^3.11` per constitution. No dependencies or tests exist yet.
 
 ## Commands
 
@@ -27,5 +27,6 @@ uv add <package>
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan at:
+`specs/001-m1-foundation-infrastructure/plan.md`
 <!-- SPECKIT END -->
