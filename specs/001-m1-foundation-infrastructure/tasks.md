@@ -127,8 +127,8 @@
 
 **Checkpoint**: `uv run pytest tests/unit/vector_store/ -v` must be GREEN. User Story 3 is independently testable.
 
-- [ ] T062b [US3] [COMMIT-GREEN] Confirm `uv run pytest tests/unit/vector_store/ -v` shows ALL tests PASSING, then commit: `git commit -m "green(us3): QdrantVectorStoreProvider — all tests passing"` — required for Gate 1
-- [ ] T062r [US3] [COMMIT-REFACTOR] Refactor sweep scoped to US3 only: remove dead code, improve naming clarity, eliminate duplication within `deepeval/vector_store/`; keep `uv run pytest tests/unit/vector_store/ -v` GREEN throughout; then commit: `git commit -m "refactor(us3): QdrantVectorStoreProvider — story-scoped refactor"` — REFACTOR phase of the RED→GREEN→REFACTOR cycle for US3 (constitution Principle III)
+- [X] T062b [US3] [COMMIT-GREEN] Confirm `uv run pytest tests/unit/vector_store/ -v` shows ALL tests PASSING, then commit: `git commit -m "green(us3): QdrantVectorStoreProvider — all tests passing"` — required for Gate 1
+- [X] T062r [US3] [COMMIT-REFACTOR] Refactor sweep scoped to US3 only: remove dead code, improve naming clarity, eliminate duplication within `deepeval/vector_store/`; keep `uv run pytest tests/unit/vector_store/ -v` GREEN throughout; then commit: `git commit -m "refactor(us3): QdrantVectorStoreProvider — story-scoped refactor"` — REFACTOR phase of the RED→GREEN→REFACTOR cycle for US3 (constitution Principle III)
 
 
 ---

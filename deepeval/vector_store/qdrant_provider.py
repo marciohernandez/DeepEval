@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,9 +12,7 @@ from qdrant_client.models import Distance, VectorParams
 
 from deepeval.config.config_manager import ConfigManager
 
-logger = logging.getLogger(__name__)
-
-_COLLECTION_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+_COLLECTION_NAME_RE = re.compile(r"[a-zA-Z0-9_-]+")
 
 
 @dataclass
@@ -68,7 +65,7 @@ class QdrantVectorStoreProvider:
         return cls._instance
 
     def get_store(self, collection_name: str) -> QdrantVectorStore:
-        if not _COLLECTION_NAME_RE.match(collection_name):
+        if not _COLLECTION_NAME_RE.fullmatch(collection_name):
             raise VectorStoreError(
                 f"Invalid collection name '{collection_name}'. "
                 "Must match ^[a-zA-Z0-9_-]+$"
