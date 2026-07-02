@@ -1,9 +1,4 @@
-"""EvaluationRepository — persists EvaluationResult to Supabase (US6).
-
-Credentials sourced exclusively from ConfigManager (FR-011).
-Write failures raise RepositoryError — no silent data loss (FR-017).
-org_id is always included in every insert, even when None (FR-016).
-"""
+"""EvaluationRepository — persists EvaluationResult to Supabase (US6)."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -31,7 +26,7 @@ class EvaluationRepository:
         self._client = create_client(url, key)
 
     def save(self, result: EvaluationResult) -> UUID:
-        """Insert result into evaluation_results and return result.id (FR-015)."""
+        """Insert result and return its pre-generated UUID without a DB round-trip."""
         data = {
             "id": str(result.id),
             "bot_id": result.bot_id,
@@ -101,7 +96,7 @@ class EvaluationRepository:
             raise RepositoryError(str(exc)) from exc
 
     def _row_to_result(self, row: dict) -> EvaluationResult:
-        """Map a Supabase row dict to EvaluationResult with explicit type coercion (T053)."""
+        """Map a Supabase row dict to EvaluationResult with explicit type coercion."""
         return EvaluationResult(
             id=UUID(row["id"]),
             bot_id=row["bot_id"],
