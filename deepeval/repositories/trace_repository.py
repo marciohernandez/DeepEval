@@ -15,7 +15,7 @@ SDK Research Gate (T043a) findings:
 """
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
 
 from deepeval.observability.langfuse_client import LangfuseClient
 from deepeval.repositories.models import TraceRecord
@@ -65,8 +65,8 @@ class TraceRepository:
     def get_by_date_range(
         self,
         bot_id: str,
-        start: Any,
-        end: Any,
+        start: datetime,
+        end: datetime,
     ) -> list[TraceRecord]:
         """Return traces tagged with bot_id within [start, end] (UTC).
 
@@ -84,12 +84,11 @@ class TraceRepository:
         except Exception as exc:
             raise TraceRepositoryError(str(exc)) from exc
 
-    def _to_trace_record(self, raw: Any, bot_id: str = "") -> TraceRecord:
-        """Map a raw Langfuse SDK trace object to a TraceRecord value object.
+    def _to_trace_record(self, raw: object, bot_id: str = "") -> TraceRecord:
+        """Map a raw Langfuse SDK trace object to a TraceRecord.
 
-        bot_id is passed explicitly by get_by_bot and get_by_date_range (which
-        know the bot_id from the query). For get_by_session, bot_id is extracted
-        from the first tag on the trace (the bot_name tag convention per data model).
+        When bot_id is not passed (get_by_session), falls back to the first tag
+        on the trace (the bot_name tag convention per data-model.md).
         """
         effective_bot_id = bot_id or (raw.tags[0] if raw.tags else "")
         return TraceRecord(
