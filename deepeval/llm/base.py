@@ -40,3 +40,12 @@ class LLMProviderBase(ABC):
 
     def get_model_name(self) -> str:
         return self.model_name
+
+    def _extract_usage(self, response) -> TokenUsage:
+        usage = response.usage_metadata
+        if usage is None:
+            return TokenUsage(input_tokens=0, output_tokens=0)
+        return TokenUsage(
+            input_tokens=usage["input_tokens"],
+            output_tokens=usage["output_tokens"],
+        )

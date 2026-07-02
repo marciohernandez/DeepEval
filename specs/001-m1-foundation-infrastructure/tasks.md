@@ -166,7 +166,7 @@
 **Checkpoint**: `uv run pytest tests/unit/llm/ -v` must be GREEN. User Story 4 is independently testable.
 
 - [X] T063b [US4] [COMMIT-GREEN] Confirm `uv run pytest tests/unit/llm/ -v` shows ALL tests PASSING, then commit: `git commit -m "green(us4): LLMProviderFactory — all tests passing"` — required for Gate 1
-- [ ] T063r [US4] [COMMIT-REFACTOR] Refactor sweep scoped to US4 only: remove dead code, improve naming clarity, eliminate duplication within `deepeval/llm/`; keep `uv run pytest tests/unit/llm/ -v` GREEN throughout; then commit: `git commit -m "refactor(us4): LLMProviderFactory — story-scoped refactor"` — REFACTOR phase of the RED→GREEN→REFACTOR cycle for US4 (constitution Principle III)
+- [X] T063r [US4] [COMMIT-REFACTOR] Refactor sweep scoped to US4 only: remove dead code, improve naming clarity, eliminate duplication within `deepeval/llm/`; keep `uv run pytest tests/unit/llm/ -v` GREEN throughout; then commit: `git commit -m "refactor(us4): LLMProviderFactory — story-scoped refactor"` — REFACTOR phase of the RED→GREEN→REFACTOR cycle for US4 (constitution Principle III)
 
 ---
 

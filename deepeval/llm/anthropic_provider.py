@@ -35,12 +35,3 @@ class AnthropicProvider(LLMProviderBase):
     async def a_generate(self, prompt: str) -> tuple[str, TokenUsage]:
         response = await self._lc_model.ainvoke(prompt)
         return response.content, self._extract_usage(response)
-
-    def _extract_usage(self, response) -> TokenUsage:
-        usage = response.usage_metadata
-        if usage is None:
-            return TokenUsage(input_tokens=0, output_tokens=0)
-        return TokenUsage(
-            input_tokens=usage["input_tokens"],
-            output_tokens=usage["output_tokens"],
-        )
