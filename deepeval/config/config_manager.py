@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, TypeVar
+
+_T = TypeVar("_T")
 
 import yaml
 from dotenv import dotenv_values
@@ -74,7 +76,7 @@ class ConfigManager:
                     is_sensitive=self._is_sensitive(key),
                 )
 
-    def _flatten_yaml(self, data: dict, prefix: str, source_file: str) -> None:
+    def _flatten_yaml(self, data: dict[str, Any], prefix: str, source_file: str) -> None:
         for k, v in data.items():
             flat_key = f"{prefix}.{k}" if prefix else str(k)
             if isinstance(v, dict):
@@ -105,7 +107,7 @@ class ConfigManager:
         except ConfigError:
             return default
 
-    def get_typed(self, key: str, expected_type: type) -> Any:
+    def get_typed(self, key: str, expected_type: type[_T]) -> _T:
         value = self.get(key)
         try:
             return expected_type(value)
