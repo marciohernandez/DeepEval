@@ -2,7 +2,9 @@
 
 **Projeto:** DeepEval Chatbot Evaluator  
 **Data:** 2026-06-19  
-**Versão do documento:** 1.0  
+**Versão do documento:** 1.1 (atualizado após M1 — Fundação e Infraestrutura)  
+
+> **Changelog v1.1:** Documento revisado após a conclusão do M1, com base nos artefatos reais do spec-kit (`plan.md`, `research.md`, `data-model.md`) e no `pyproject.toml` do repositório. Três correções principais: (1) estrutura de pastas do código-fonte adicionada à seção 5 — antes só existia nos artefatos do milestone; (2) OpenRouter passa a usar integração dedicada do LangChain em vez do workaround via `base_url`; (3) Qdrant passa a usar `langchain-qdrant` como dependência direta, com `qdrant-client` como transitiva. Mudanças marcadas com 🔄 ao longo do documento.
 
 ---
 
@@ -24,13 +26,13 @@
 ├──────────────┬───────────────────────────────────────────┤
 │   COLETA     │          ORQUESTRAÇÃO DE BOTS             │
 │  Langfuse    │  LangChain 1.3.x + LangGraph 1.2.x        │
-│   4.9.x      │  + Flowise (self-hosted)                  │
+│   4.13.x     │  + Flowise (self-hosted)                  │
 ├──────────────┴───────────────────────────────────────────┤
 │                      PERSISTÊNCIA                        │
 │   Supabase (relacional) · Qdrant (vetorial) · CSV        │
 ├──────────────────────────────────────────────────────────┤
 │                    INFRAESTRUTURA                        │
-│      Python 3.11+ · Docker · APScheduler                 │
+│      Python 3.11+ (3.13 pinned) · Docker · APScheduler   │
 │      python-dotenv · PyYAML · pytest                     │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -43,7 +45,7 @@
 
 | Tecnologia | Versão | Justificativa |
 |-----------|--------|---------------|
-| **Python** | `^3.11` | Suportado por todas as libs do projeto; tipagem moderna com `match/case` e `TypeAlias` |
+| **Python** | `^3.11` (mínimo) — `3.13` pinado via `.python-version` 🔄 | Suportado por todas as libs do projeto; tipagem moderna com `match/case` e `TypeAlias`. O M1 fixou `3.13` no ambiente de desenvolvimento local (`uv`), mantendo `^3.11` como piso mínimo de compatibilidade. |
 
 ---
 
@@ -57,14 +59,18 @@
 
 **Métricas ativas:** AnswerRelevancy, Faithfulness, ContextualPrecision, ContextualRecall, ContextualRelevancy, Hallucination, ToolCorrectness, TaskCompletion, Bias, Toxicity, Summarization, JsonCorrectness, PromptAlignment, KnowledgeRetention, RoleAdherence, ConversationCompleteness, ConversationRelevancy, GEval, DAGMetric, RagasMetric.
 
+> **Nota de escopo (pós-M1):** o M1 validou o round-trip de infraestrutura (trace lido → LLM chamado via `LLMProviderFactory.generate()` → resultado persistido), mas a invocação real das métricas DeepEval acima (`AnswerRelevancyMetric` etc.) ainda não foi conectada — está no escopo do M3 (Motor de Avaliação e Métricas). Ou seja, o motor de métricas em si ainda não roda ponta a ponta.
+
 ---
 
 ### 2.3 Observabilidade e Traces
 
 | Tecnologia | Versão | Papel |
 |-----------|--------|-------|
-| **Langfuse Python SDK** | `^4.9.1` | Buscar traces dos chatbots; enviar scores de avaliação de volta |
+| **Langfuse Python SDK** | `>=4.13.0` 🔄 (era `^4.9.1`) | Buscar traces dos chatbots; enviar scores de avaliação de volta |
 | **Langfuse** (servidor) | self-hosted na VPS | Armazena todos os traces dos bots em produção |
+
+> 🔄 **Correção pós-M1:** a versão foi atualizada de `^4.9.1` para `>=4.13.0` porque o SDK real usado no M1 já está nessa faixa, e a migração trouxe mudanças de API relevantes: o método `trace()` foi removido no SDK v4.x e a integração precisou migrar para `api.ingestion.batch()` com `TraceBody`. Módulos futuros que também usam o Langfuse SDK (M2, M4, M6) devem considerar essa API desde o início, não a antiga.
 
 **Dois modos de integração suportados:**
 
@@ -100,7 +106,7 @@ result = chain.invoke(input, config={"callbacks": [handler]})
 | **LangGraph** | `^1.2.6` | Bots com fluxo de agentes multi-step |
 | **Flowise** | self-hosted | Bots low-code já em produção (V1) |
 
-> **Regra:** Antes de qualquer código, consultar o MCP do LangChain. Se existir classe/função nativa → usar. Só desenvolver do zero se não existir.
+> **Regra:** Antes de qualquer código, consultar o MCP do LangChain. Se existir classe/função nativa → usar. Só desenvolver do zero se não existir. **Confirmado no M1**: essa regra foi seguida de fato e mudou duas decisões técnicas — ver §2.7 (Qdrant) e §2.8 (OpenRouter).
 
 ---
 
@@ -121,7 +127,7 @@ result = chain.invoke(input, config={"callbacks": [handler]})
 - `users` — login/senha via Supabase Auth
 - `bots` — configuração dos bots avaliados
 - `evaluation_runs` — cada execução do avaliador
-- `evaluation_results` — scores por trace/métrica
+- `evaluation_results` — scores por trace/métrica (schema confirmado no M1, ver `migrations/001_evaluation_results.sql`)
 
 **Estratégia de migração V1 → V2:**
 - Toda persistência via `Repository` (pattern) — troca Supabase por Postgres puro sem tocar em regras de negócio
@@ -143,18 +149,24 @@ result = chain.invoke(input, config={"callbacks": [handler]})
 - Nunca usar `user_id` hardcoded como escopo global
 - Projetar tabelas já com campo `org_id` nullable (preenchido quando o multi-tenant for ativado)
 
+**Confirmado no M1:** `EvaluationResult.org_id` é `UUID | None`, incluído em todo insert mesmo quando `None` — validado em `data-model.md` e nos testes de integração do M1.
+
 ---
 
 ### 2.7 Banco de Dados Vetorial
 
 | Tecnologia | Versão | Papel |
 |-----------|--------|-------|
-| **Qdrant** | `^1.18.0` (client) | Armazenar datasets de avaliação e embeddings para busca semântica |
+| **`langchain-qdrant`** 🔄 (era `qdrant-client` direto) | `latest ^0.x` | Camada oficial de integração — `QdrantVectorStoreProvider` usa `langchain_qdrant.QdrantVectorStore` |
+| **`qdrant-client`** | transitivo (não adicionar direto) 🔄 | Usado internamente pelo `langchain-qdrant` apenas para checagens de DDL (criação de coleções) |
 | **Qdrant** (servidor) | self-hosted na VPS | Já disponível na infraestrutura atual |
+
+> 🔄 **Correção pós-M1:** o documento original listava `qdrant-client ^1.18.0` como dependência direta. A regra "LangChain First" (§2.4) levou à descoberta, via MCP, de que `langchain_qdrant.QdrantVectorStore` é a integração nativa recomendada — ela já oferece `add_documents`, `similarity_search` e `.as_retriever()` prontos para uso em LangChain/LangGraph. `qdrant-client` continua presente no projeto, mas como dependência **transitiva** de `langchain-qdrant`, não para uso direto.
 
 **Uso no sistema:**
 - Datasets de golden-set para avaliações (conjuntos de perguntas + respostas esperadas)
 - Busca semântica de traces similares para análise de padrões
+- Modelo de embedding único e global por V1 (`config/settings.yaml`: `embedding.model`, `embedding.dimensions`), via `OpenAIEmbeddings` (`langchain-openai`) — confirmado no M1
 
 ---
 
@@ -164,27 +176,28 @@ O sistema adota uma **arquitetura de providers extensível**: qualquer ponto que
 
 #### Provedores suportados
 
-| Provider | SDK | Modelos exemplo | Papel no sistema |
+| Provider | SDK / Integração | Modelos exemplo | Papel no sistema |
 |---------|-----|----------------|-----------------|
-| **OpenAI** | `openai>=1.30.0` | `gpt-4o`, `gpt-4o-mini` | Modelo juiz padrão para métricas DeepEval |
-| **Anthropic** | `anthropic>=0.30.0` | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Alternativa de alta precisão |
-| **OpenRouter** | `openai>=1.30.0` (base URL alternativa) | Qualquer modelo do catálogo | Acesso unificado a centenas de modelos via uma API key |
+| **OpenAI** | `langchain-openai` (`ChatOpenAI`) | `gpt-4o`, `gpt-4o-mini` | Modelo juiz padrão para métricas DeepEval |
+| **Anthropic** | `langchain-anthropic` (`ChatAnthropic`) | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Alternativa de alta precisão |
+| **OpenRouter** | `langchain-openrouter` (`ChatOpenRouter`) 🔄 | Qualquer modelo do catálogo | Acesso unificado a centenas de modelos via uma API key |
 
-> **OpenRouter** usa o mesmo SDK da OpenAI — só muda a `base_url` para `https://openrouter.ai/api/v1`. Nenhuma dependência extra.
+> 🔄 **Correção pós-M1 — OpenRouter:** o documento original dizia que o OpenRouter usaria o mesmo SDK da OpenAI, só trocando a `base_url`. A consulta ao MCP do LangChain (Principle II) encontrou orientação explícita da documentação contra essa abordagem — *"For OpenRouter, prefer the dedicated integration `ChatOpenRouter`"* e *"non-standard response fields from third-party providers are not extracted or preserved [por `ChatOpenAI`]"*. A decisão final foi usar o pacote dedicado `langchain-openrouter` (`ChatOpenRouter`), verificado em `0.2.4` no PyPI, compatível com `langchain-core >= 1.4.7`. **O workaround `ChatOpenAI + base_url` não deve mais ser usado.**
 
 #### Arquitetura de abstração
 
 ```
 LLMProviderBase (DeepEvalBaseLLM)
-    ├── OpenAIProvider
-    ├── AnthropicProvider
-    ├── OpenRouterProvider
+    ├── OpenAIProvider       (wraps ChatOpenAI)
+    ├── AnthropicProvider    (wraps ChatAnthropic)
+    ├── OpenRouterProvider   (wraps ChatOpenRouter)  🔄
     └── [FuturoProvider]  ← adicionar novo provider = criar nova subclasse
 ```
 
 - `LLMProviderBase` implementa `DeepEvalBaseLLM` — integração nativa com todas as métricas DeepEval
+- Cada `LLMProviderBase` mantém internamente um `_lc_model` (o chat model do LangChain) e delega a ele — confirmado no M1 (`data-model.md`)
 - `LLMProviderFactory.create(provider, model)` — instancia o provider correto a partir do `.env`
-- Adicionar novo provider = criar uma subclasse + registrar na Factory, **sem tocar no restante do sistema**
+- Adicionar novo provider = criar uma subclasse + registrar na Factory, **sem tocar no restante do sistema** (validado no M1 como critério de sucesso SC-006)
 
 #### Configuração no `.env`
 
@@ -255,7 +268,7 @@ PROMPT_OPTIMIZER_ALGORITHM=gepa        # gepa | miprov2
 PROMPT_OPTIMIZER_MAX_CONCURRENT=10     # paralelismo durante otimização
 ```
 
-**Pendência investigar (Flowise):** verificar se a API do Flowise aceita `overrideConfig.systemPrompt` no body do request — se sim, o modo automático pode ser ativado para bots Flowise sem mudança de arquitetura.
+**Pendência investigar (Flowise):** verificar se a API do Flowise aceita `overrideConfig.systemPrompt` no body do request — se sim, o modo automático pode ser ativado para bots Flowise sem mudança de arquitetura. Não bloqueia V1.
 
 ---
 
@@ -288,7 +301,7 @@ O DeepEval fornece duas classes nativas para geração de dados sintéticos — 
 
 ---
 
-### 2.10 Agendamento
+### 2.11 Agendamento
 
 | Tecnologia | Versão | Papel |
 |-----------|--------|-------|
@@ -296,7 +309,7 @@ O DeepEval fornece duas classes nativas para geração de dados sintéticos — 
 
 ---
 
-### 2.11 Configuração e Segurança
+### 2.12 Configuração e Segurança
 
 | Tecnologia | Versão | Papel |
 |-----------|--------|-------|
@@ -310,16 +323,18 @@ O DeepEval fornece duas classes nativas para geração de dados sintéticos — 
 - `ConfigManager` (Singleton) é o único ponto de leitura de config no sistema
 - Logs nunca expõem valores de variáveis sensíveis
 
+**Confirmado no M1:** auditorias automatizadas (`grep` sobre `deepeval/`) validam continuamente que (a) nenhuma credencial aparece hardcoded e (b) nenhum módulo além de `deepeval/config/config_manager.py` importa `os`/`dotenv`/`yaml` diretamente. Essas duas checagens fazem parte do quality gate de cada milestone (ver `Phase 9` do M1).
+
 ---
 
-### 2.12 Testes
+### 2.13 Testes
 
 | Tecnologia | Versão | Papel |
 |-----------|--------|-------|
-| **pytest** | `^8.0.0` | Framework principal de testes (TDD) |
-| **pytest-cov** | `^5.0.0` | Cobertura de código (meta: ≥ 80%) |
-| **pytest-asyncio** | `^0.23.0` | Testes de métodos assíncronos |
-| **pytest-mock** | `^3.14.0` | Mocks para isolamento de unidades |
+| **pytest** | `^8.0.0` (M1 usou `^9.1.1`, compatível) | Framework principal de testes (TDD) |
+| **pytest-cov** | `^5.0.0` (M1 usou `^7.1.0`, compatível) | Cobertura de código (meta: ≥ 80%) |
+| **pytest-asyncio** | `^0.23.0` (M1 usou `^1.4.0`, compatível) | Testes de métodos assíncronos |
+| **pytest-mock** | `^3.14.0` (M1 usou `^3.15.1`, compatível) | Mocks para isolamento de unidades |
 
 **Fluxo TDD obrigatório:**
 ```
@@ -328,9 +343,11 @@ O DeepEval fornece duas classes nativas para geração de dados sintéticos — 
 3. Refatorar → GREEN mantido
 ```
 
+**Resultado real no M1:** cobertura de 94–95% (meta era ≥ 80%), todos os módulos acima do piso.
+
 ---
 
-### 2.13 Containerização
+### 2.14 Containerização
 
 | Tecnologia | Papel |
 |-----------|-------|
@@ -338,9 +355,11 @@ O DeepEval fornece duas classes nativas para geração de dados sintéticos — 
 | **Docker Compose** | Orquestração local (app + Langfuse + Qdrant) |
 | **Dockerfile** | Imagem Python com dependências fixadas |
 
+> Ainda não implementado até o M1 (infraestrutura de containerização não fazia parte do escopo do M1). Reavaliar quando o M5 (Dashboard e API) estiver planejado.
+
 ---
 
-### 2.14 Frontend / Dashboard
+### 2.15 Frontend / Dashboard
 
 **Inspiração de produto:** [Confident AI](https://www.confident-ai.com) — tema escuro, tabelas de resultados com badges PASS/FAIL, gráficos de evolução de qualidade, visualização de trace tree, histórico de versões de prompt.
 
@@ -354,6 +373,8 @@ O DeepEval fornece duas classes nativas para geração de dados sintéticos — 
 | **Estilização** | Tailwind CSS (`^3.4`) | Utilitários CSS — integrado ao shadcn/ui |
 | **Gráficos** | Recharts | Gráficos de linha/barra para evolução de scores e comparação entre runs |
 | **Tabelas** | TanStack Table (`^8`) | Tabelas com filtros, ordenação e paginação para resultados de avaliação |
+
+> Esta stack já está definida desde a v1.0 deste documento — não é uma decisão pendente. O item "Definir stack do dashboard" no `briefing.md` (seção Próximos Passos) está desatualizado e deve ser removido ou reescrito de lá.
 
 #### Arquitetura do dashboard
 
@@ -418,22 +439,26 @@ python-jose>=3.3.0        # JWT decode para auth Supabase
 
 | Pattern | Onde aplicar |
 |---------|-------------|
-| **Singleton** | `ConfigManager`, `LangfuseClient`, `QdrantClient` |
+| **Singleton** | `ConfigManager`, `LangfuseClient`, `QdrantVectorStoreProvider` 🔄 (era `QdrantClient` — renomeado para refletir a integração via `langchain-qdrant`, ver §2.7) |
 | **Factory Method** | `MetricFactory.create(name)` — instancia métricas DeepEval sem `if/else`; `LLMProviderFactory.create(provider, model)` — instancia o provider correto |
 | **Strategy** | `TraceExtractor` — estratégia por tipo de bot (Flowise vs LangChain vs LangGraph) |
 | **Observer** | `ResultPublisher` — notifica Langfuse, CSV, Qdrant após avaliação |
 | **Repository** | `TraceRepository`, `EvaluationRepository` — isola queries da lógica de negócio |
 
+**Confirmado no M1:** todos os 5 padrões acima que estavam no escopo do M1 (Singleton, Factory Method, Repository) foram implementados e testados. Strategy e Observer entram em M2 e M4, respectivamente.
+
 ---
 
 ## 4. requirements.txt (base)
+
+> 🔄 Atualizado para refletir o `pyproject.toml` real do repositório após o M1.
 
 ```text
 # Avaliação
 deepeval>=4.0.6,<5.0.0
 
 # Observabilidade
-langfuse>=4.9.1,<5.0.0
+langfuse>=4.13.0,<5.0.0                  # 🔄 era >=4.9.1
 
 # Orquestração
 langchain>=1.3.10,<2.0.0
@@ -443,39 +468,110 @@ langgraph>=1.2.6,<2.0.0
 supabase>=2.0.0,<3.0.0
 
 # Banco vetorial
-qdrant-client>=1.18.0,<2.0.0
+langchain-qdrant>=1.1.0                  # 🔄 substitui qdrant-client como dependência direta
+# qdrant-client                          # transitivo via langchain-qdrant — não adicionar direto
 
-# LLM Providers
-openai>=1.30.0,<2.0.0        # OpenAI + OpenRouter (mesma lib, base_url diferente)
-anthropic>=0.30.0,<1.0.0     # Anthropic
+# LLM Providers (via integrações dedicadas do LangChain)  🔄
+langchain-openai>=1.3.3                  # OpenAI (ChatOpenAI + OpenAIEmbeddings)
+langchain-anthropic>=1.4.8               # Anthropic (ChatAnthropic)
+langchain-openrouter>=0.2                # OpenRouter (ChatOpenRouter) — não usar ChatOpenAI+base_url
+
+# Persistência adicional
+psycopg2-binary>=2.9.12                  # 🔄 driver Postgres direto, usado pelo EvaluationRepository/migrations
 
 # Agendamento
 APScheduler>=3.10.0,<4.0.0
 
 # Configuração
-python-dotenv>=1.0.0
-PyYAML>=6.0
+python-dotenv>=1.2.2
+PyYAML>=6.0.3
 
 # Testes
-pytest>=8.0.0
-pytest-cov>=5.0.0
-pytest-asyncio>=0.23.0
-pytest-mock>=3.14.0
+pytest>=9.1.1
+pytest-cov>=7.1.0
+pytest-asyncio>=1.4.0
+pytest-mock>=3.15.1
 ```
 
 ---
 
-## 5. Estrutura de Configuração
+## 5. Estrutura de Pastas
 
+> 🔄 **Seção reescrita pós-M1.** Antes só existia a estrutura de `config/`; agora inclui a árvore real do código-fonte, confirmada em `specs/001-m1-foundation-infrastructure/plan.md`.
+
+### 5.1 Código-fonte (`deepeval/`)
+
+```text
+deepeval/                          # Pacote principal
+├── __init__.py
+├── config/
+│   ├── __init__.py
+│   └── config_manager.py          # ConfigManager (Singleton) + ConfigError
+├── observability/
+│   ├── __init__.py
+│   └── langfuse_client.py         # LangfuseClient (Singleton) + TelemetryEvent
+├── vector_store/
+│   ├── __init__.py
+│   └── qdrant_provider.py         # QdrantVectorStoreProvider (Singleton) + VectorStoreError
+├── llm/
+│   ├── __init__.py
+│   ├── base.py                    # LLMProviderBase (ABC, implementa DeepEvalBaseLLM)
+│   ├── openai_provider.py         # OpenAIProvider (wraps ChatOpenAI)
+│   ├── anthropic_provider.py      # AnthropicProvider (wraps ChatAnthropic)
+│   ├── openrouter_provider.py     # OpenRouterProvider (wraps ChatOpenRouter)
+│   └── factory.py                 # LLMProviderFactory (Factory Method)
+└── repositories/
+    ├── __init__.py
+    ├── models.py                  # TraceRecord, EvaluationResult (dataclasses)
+    ├── trace_repository.py        # TraceRepository (lê do Langfuse SDK)
+    └── evaluation_repository.py   # EvaluationRepository (escreve no Supabase)
 ```
+
+> Módulos futuros (`metrics/`, `strategies/`, `observers/`, `api/`, etc.) serão adicionados milestone a milestone, seguindo o mesmo princípio de um pacote por domínio. Esta seção deve ser atualizada a cada milestone concluído.
+
+### 5.2 Testes
+
+```text
+tests/
+├── conftest.py                    # Fixtures compartilhadas: mock ConfigManager, mock env
+├── unit/
+│   ├── config/test_config_manager.py
+│   ├── observability/test_langfuse_client.py
+│   ├── vector_store/test_qdrant_provider.py
+│   ├── llm/
+│   │   ├── test_llm_provider_base.py
+│   │   ├── test_openai_provider.py
+│   │   ├── test_anthropic_provider.py
+│   │   ├── test_openrouter_provider.py
+│   │   └── test_llm_factory.py
+│   └── repositories/
+│       ├── test_trace_repository.py
+│       └── test_evaluation_repository.py
+└── integration/
+    ├── test_config_manager_integration.py
+    ├── test_langfuse_client_integration.py
+    ├── test_qdrant_provider_integration.py
+    ├── test_llm_factory_integration.py
+    ├── test_trace_repository_integration.py
+    └── test_evaluation_repository_integration.py
+```
+
+> Integração testa contra serviços reais (Langfuse, Qdrant, Supabase) — não usa mocks, seguindo a diretriz "nunca mockar o banco" adotada no M1.
+
+### 5.3 Configuração e migrações
+
+```text
 config/
 ├── bots.yaml               # Configuração dos bots e métricas (não sensível, versionado)
-├── settings.yaml           # Configurações gerais de ambiente (não sensível, versionado)
+├── settings.yaml           # Configurações gerais de ambiente, incl. embedding.model/dimensions
 ├── personas.yaml           # Perfis de usuário para datasets sintéticos (versionado)
 └── knowledge_base/         # Documentos da empresa para geração de goldens (versionado)
     ├── faq_empresas.md
     ├── contrato_servicos.pdf
     └── ...
+
+migrations/                 # Migrações SQL versionadas (nunca aplicar via editor do Supabase)
+└── 001_evaluation_results.sql
 
 .env                        # Chaves e segredos (NUNCA versionado)
 .env.example                # Template com chaves sem valores (versionado)
@@ -499,6 +595,8 @@ DB_PROVIDER=supabase           # supabase | postgres
 SUPABASE_URL=https://xxxx.supabase.co
 SUPABASE_SERVICE_KEY=service_role_key...
 SUPABASE_ANON_KEY=anon_key...
+# DATABASE_URL — string de conexão direta Postgres, usada só por psql/supabase db push
+# para aplicar migrações; nunca lida pelo código da aplicação. 🔄 (confirmado no M1)
 
 # (Para V2+ com Postgres puro)
 # DB_PROVIDER=postgres
@@ -529,12 +627,13 @@ DRY_RUN=false
 
 ## 6. Decisões em Aberto
 
+> Esta seção lista **apenas** decisões genuinamente pendentes. Itens já resolvidos foram movidos para as seções correspondentes acima (ver §2.15 sobre o dashboard).
+
 | Decisão | Status | Impacto |
 |---------|--------|---------|
-| **Frontend / Dashboard** | **Definido:** Next.js + shadcn/ui + Tailwind + FastAPI | Stack completa documentada na seção 2.14 |
-| Modelo juiz padrão (gpt-4o-mini vs Ollama local) | Flexível via `.env` | Custo vs precisão |
-| Supabase cloud vs self-hosted | **Definido: cloud** (supabase.com) | URL e keys vêm do painel do Supabase |
-| Autenticação no Qdrant | **Definido: tem API key** | Variável `QDRANT_API_KEY` obrigatória no `.env` |
+| Modelo juiz padrão (gpt-4o-mini vs Ollama local) | Flexível via `.env` — não bloqueia | Custo vs precisão |
+| Flowise — `overrideConfig.systemPrompt` no request | A investigar no M6 (não bloqueia V1) | Define se a otimização de prompt em bots Flowise pode ser automática |
+| `TokenUsage` — tipo nativo do DeepEval ou custom | A confirmar durante a implementação de módulos que o consomem (M1 já deixou como tipo condicional) | Baixo — decisão local, não afeta arquitetura |
 
 ---
 
@@ -546,3 +645,4 @@ DRY_RUN=false
 - LangChain: https://python.langchain.com
 - LangGraph: https://langchain-ai.github.io/langgraph
 - Qdrant: https://qdrant.tech/documentation
+- Artefatos do M1 (spec-kit): `specs/001-m1-foundation-infrastructure/{spec,plan,research,data-model,quickstart}.md`
