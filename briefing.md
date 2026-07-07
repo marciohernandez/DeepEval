@@ -441,9 +441,10 @@ O Langfuse tem versionamento de prompts nativo. Cada versão otimizada fica regi
 
 ## 9. Próximos Passos
 
+> **Nota (pós-M1):** o item "Definir stack do dashboard" foi removido desta lista — a stack já está definida desde a v1.0 deste documento (seção 4: Next.js + shadcn/ui + Tailwind CSS + FastAPI) e detalhada em `tech_stack.md` §2.15. Não é uma decisão pendente.
+
 1. **Aprovar este briefing**
-2. **Definir stack do dashboard** (Streamlit vs Grafana vs outro)
-3. **Gerar Feature Specs** por módulo:
+2. **Gerar Feature Specs** por módulo:
    - Módulo de configuração (`ConfigManager` — Singleton)
    - Módulo de coleta de traces (Langfuse + Repository)
    - Módulo de extração de traces (`FlowiseExtractor` + `LangChainExtractor` — Strategy)
@@ -456,8 +457,8 @@ O Langfuse tem versionamento de prompts nativo. Cada versão otimizada fica regi
    - Módulo de notificação/export (`ResultPublisher` — Observer)
    - Módulo de dashboard
    - Módulo de scheduler (APScheduler)
-4. **Decidir o que aproveitar** do protótipo `deepeval-leadmedia/`
-5. **Iniciar desenvolvimento com TDD**
+3. **Decidir o que aproveitar** do protótipo `deepeval-leadmedia/`
+4. **Iniciar desenvolvimento com TDD**
 
 ---
 
