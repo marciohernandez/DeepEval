@@ -59,6 +59,13 @@ Desenvolver um **sistema centralizado de avaliação de qualidade de chatbots** 
 | Backend API (dashboard) | FastAPI (Python) |
 | Configuração | `.env` + YAML por ambiente (`config/`) |
 
+> **Nota (pós-M1/M2.1):** esta tabela é a visão de alto nível original do briefing e permanece
+> válida em espírito. Detalhes de implementação evoluíram desde então (rename `deepeval/` →
+> `deepeval_platform/`; providers de LLM usando classes nativas `deepeval.models.GPTModel/
+> AnthropicModel/OpenRouterModel`; Qdrant via `langchain-qdrant` como dependência direta; Langfuse
+> SDK `>=4.13.0`) — ver `tech_stack.md` e `.specify/memory/constitution.md` para o estado atual
+> e vinculante da stack.
+
 ### Regras obrigatórias de desenvolvimento — DeepEval First (principal) e LangChain First (secundário)
 
 > **Atualização (pós-M2.1):** o DeepEval é o **framework principal** deste projeto — o motor

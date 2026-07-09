@@ -1,36 +1,39 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.1.0 → 1.2.1 (see PATCH note at end of this report)
-Bump type: MINOR (Technology Stack substitution — LLM Providers section rewritten to reflect
-  the native-DeepEval-model refactor; this is a stack substitution under the Technology Stack
-  section's own governance rule, requiring MINOR minimum)
+Version change: 1.2.1 → 1.3.0
+Bump type: MINOR (Technology Stack substitutions — Qdrant vector-store dependency and Langfuse
+  SDK version/API brought into sync with what tech_stack.md had already documented as
+  implemented and validated in M1; per the Technology Stack section's own governance rule,
+  substitutions require a MINOR bump minimum)
 
 Added sections: N/A
 
 Modified sections:
-  - Technology Stack → LLM Providers: previously stated OpenRouter goes through
-    `langchain-openrouter`/`ChatOpenRouter` and "`LLMProviderBase` MUST implement
-    `DeepEvalBaseLLM`". Both were already false in the shipped code as of commit `3455bfd`
-    (`OpenAIProvider`/`AnthropicProvider`/`OpenRouterProvider` wrap DeepEval's own
-    `GPTModel`/`AnthropicModel`/`OpenRouterModel`; `LLMProviderBase` is a project-local ABC with
-    an `as_deepeval_model()` escape hatch, not a `DeepEvalBaseLLM` implementer) — this amendment
-    brings the constitution's binding stack description back in line with reality and records
-    the substitution as an amendment per the section's own rule ("Substitutions or additions
-    MUST be proposed as constitution amendments").
+  - Technology Stack → Persistence (Vector): was `Qdrant ^1.18.0 client`, implying `qdrant-client`
+    as a direct dependency. Corrected to `langchain-qdrant>=1.1.0` as the direct dependency
+    (`langchain_qdrant.QdrantVectorStore`, wrapped by `QdrantVectorStoreProvider`), with
+    `qdrant-client` transitive only — matching tech_stack.md §2.7 ("Confirmado no M1") and the
+    `langchain_qdrant.QdrantVectorStore` example already present in Principle III's own text
+    (line 118). This is a Principle III (LangChain-First) infrastructure decision, not an
+    evaluation-domain one — DeepEval has no native vector-store abstraction to prefer instead
+    (tech_stack.md §2.7 records that check explicitly).
+  - Technology Stack → Observability: Langfuse Python SDK bumped `^4.9.1` → `>=4.13.0`, with a
+    new breaking-change note that `trace()` was removed in v4.x in favor of
+    `api.ingestion.batch()` + `TraceBody` — matching tech_stack.md §2.3 ("Correção pós-M1").
+  - Principle VI → Design Patterns table: Singleton row updated `QdrantClient` →
+    `QdrantVectorStoreProvider`, matching the class that actually exists post-M1 (wraps
+    `langchain_qdrant.QdrantVectorStore`).
 
 Removed sections: N/A
 
-Rationale: a code review of commits `af3d32f`/`3455bfd` (package rename `deepeval/` →
-`deepeval_platform/`, then LLM providers swapped from LangChain chat models to native DeepEval
-judge-model classes) found the constitution had not been updated alongside the code — a
-governance-drift bug where the "binding" Technology Stack section contradicted the shipped
-implementation. This amendment closes that gap without changing the underlying architecture
-decision itself (already reviewed and accepted).
-
-Prior amendment resolved: the v1.1.0 TODO(SPEC_002) — specs/002-coleta-traces/research.md's
-mislabeled "LangChain-First Check" — was manually corrected to "DeepEval-First Check" in the
-same session that produced this v1.2.0 bump; no longer outstanding.
+Rationale: same governance-drift pattern already identified and fixed once for LLM Providers
+(v1.2.0) — tech_stack.md had documented these two substitutions as implemented and validated in
+M1, but the constitution's binding Technology Stack section was never amended to match, leaving
+it silently contradicting the shipped code. This amendment closes both gaps in the same pass.
+**DeepEval remains this project's primary framework (Principle II) throughout** — neither change
+touches that precedence; both are corrections scoped to Principle III (LangChain-First, the
+bot-orchestration/integration layer) and observability tooling, not the evaluation domain.
 
 Templates reviewed:
   ✅ .specify/templates/plan-template.md — no structural changes required.
@@ -46,17 +49,7 @@ Follow-up TODOs:
     DeepEval's own `calculate_cost()` can't price a call — latent for OpenAI/Anthropic on any
     model absent from DeepEval's static pricing tables (project defaults `gpt-4o` /
     `claude-sonnet-4-6` are both listed, so dormant today). Still open; revisit if a custom/
-    unlisted model is ever configured.
-
-PATCH (1.2.0 → 1.2.1): `OpenRouterProvider` now passes `cost_per_input_token=0.0,
-cost_per_output_token=0.0` to `OpenRouterModel` — this was the unconditional part of the
-TOKEN_USAGE finding above (OpenRouter has no static per-model pricing table, so
-`calculate_cost()` returned `None` on every call, discarding real token counts). Verified
-empirically: `OpenRouterModel(..., cost_per_input_token=0.0, cost_per_output_token=0.0)
-.calculate_cost(100, 50)` now returns a real `EvaluationCost` carrying the real token counts
-(cost reported as a fictional $0, which this project never surfaces — `TokenUsage` has no cost
-field). The OpenAI/Anthropic latent case above is unaffected (their `calculate_cost()` only
-consults the static pricing table, not constructor cost-per-token params) and remains open.
+    unlisted model is ever configured. (OpenRouter case fixed in v1.2.1.)
 -->
 
 # DeepEval Chatbot Evaluator Constitution
@@ -183,7 +176,7 @@ The following patterns MUST be applied in the specified contexts:
 | Pattern | Mandatory application |
 |---------|----------------------|
 | **Factory Method** | `MetricFactory.create(name)` — instantiates DeepEval metrics without if/else chains;<br>`LLMProviderFactory.create(provider, model)` — instantiates the correct LLM provider |
-| **Singleton** | `ConfigManager`, `LangfuseClient`, `QdrantClient` — one instance per process, no re-reads |
+| **Singleton** | `ConfigManager`, `LangfuseClient`, `QdrantVectorStoreProvider` — one instance per process, no re-reads |
 | **Strategy** | `TraceExtractor` — `FlowiseExtractor` and `LangChainExtractor` as interchangeable strategies;<br>new bot type = new subclass only |
 | **Observer** | `ResultPublisher` — notifies Langfuse, CSV export, Qdrant, and Dashboard after evaluation;<br>new output target = new observer only |
 | **Repository** | `TraceRepository`, `EvaluationRepository` — isolates storage queries from business logic;<br>DB backend swap (Supabase → Postgres) touches only repositories |
@@ -210,9 +203,11 @@ alternatives — they occupy different layers and are never a choice between one
 **Evaluation framework (PRIMARY)**: DeepEval `^4.0.6` — all metrics, Synthesizer,
 ConversationSimulator, PromptOptimizer (GEPA / MIPROv2)
 
-**Observability**: Langfuse Python SDK `^4.9.1` (server: self-hosted on VPS)
+**Observability**: Langfuse Python SDK `>=4.13.0` (server: self-hosted on VPS)
 - Flowise bots: traces arrive automatically via native Langfuse integration (read-only)
 - LangChain/LangGraph bots: `langfuse.callback.CallbackHandler` for controlled trace structure
+> ⚠ **Breaking-change note**: the SDK's `trace()` method was removed in v4.x. Trace ingestion
+> MUST go through `api.ingestion.batch()` with `TraceBody`, not the legacy `trace()` call.
 
 **Bot orchestration (SECONDARY — systems under evaluation)**: LangChain `^1.3.10`,
 LangGraph `^1.2.6`, Flowise (self-hosted)
@@ -223,7 +218,10 @@ LangGraph `^1.2.6`, Flowise (self-hosted)
 **Persistence**:
 - Relational V1: Supabase cloud (Postgres + Auth + RLS) via `supabase>=2.0.0`
 - Relational V2+: PostgreSQL self-hosted on VPS (swapped via Repository pattern + `DB_PROVIDER`)
-- Vector: Qdrant `^1.18.0` client (server: self-hosted on VPS, API key required)
+- Vector: `langchain-qdrant>=1.1.0` (server: self-hosted on VPS, API key required) — the native
+  LangChain integration (`langchain_qdrant.QdrantVectorStore`) is the direct dependency per
+  Principle III (LangChain-First); `qdrant-client` is a transitive dependency only, never
+  imported directly outside `langchain-qdrant` itself
 
 **LLM Providers**: OpenAI `>=1.30.0`, Anthropic `>=0.30.0`, OpenRouter — all accessed through
 `LLMProviderBase` / `LLMProviderFactory`. Each concrete provider wraps DeepEval's own
@@ -310,4 +308,4 @@ reference to the violated principle and why no simpler path exists.
 
 **Runtime guidance**: See `CLAUDE.md` for agent-specific runtime instructions.
 
-**Version**: 1.2.1 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09
+**Version**: 1.3.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09

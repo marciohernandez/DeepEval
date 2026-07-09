@@ -2,9 +2,11 @@
 
 **Projeto:** DeepEval Chatbot Evaluator  
 **Data:** 2026-06-19  
-**Versão do documento:** 1.1 (atualizado após M1 — Fundação e Infraestrutura)  
+**Versão do documento:** 1.2 (auditoria de alinhamento com `briefing.md` e `.specify/memory/constitution.md`)  
 
 > **Changelog v1.1:** Documento revisado após a conclusão do M1, com base nos artefatos reais do spec-kit (`plan.md`, `research.md`, `data-model.md`) e no `pyproject.toml` do repositório. Três correções principais: (1) estrutura de pastas do código-fonte adicionada à seção 5 — antes só existia nos artefatos do milestone; (2) OpenRouter passa a usar integração dedicada do LangChain em vez do workaround via `base_url`; (3) Qdrant passa a usar `langchain-qdrant` como dependência direta, com `qdrant-client` como transitiva. Mudanças marcadas com 🔄 ao longo do documento.
+
+> **Changelog v1.2:** Auditoria de consistência entre `briefing.md`, `tech_stack.md` e a constitution. Duas correções internas: (1) §5.1 ainda mostrava a árvore de pastas pré-M2.1 (`base.py` "implementa DeepEvalBaseLLM", providers "wraps ChatOpenAI/ChatAnthropic/ChatOpenRouter") mesmo depois de §2.8 já documentar a correção — agora ambas as seções concordam; (2) §6 tinha uma entrada de `TokenUsage` desatualizada, já resolvida em detalhe em §2.8. Além disso, a constitution (`.specify/memory/constitution.md`) foi emendada para v1.3.0 para refletir as substituições de Qdrant (`langchain-qdrant` como dependência direta) e Langfuse SDK (`>=4.13.0` + breaking change do `trace()`) que este documento já registrava como validadas no M1 mas que nunca haviam sido propagadas de volta à seção "Technology Stack" (binding) da constitution.
 
 ---
 
@@ -529,10 +531,11 @@ deepeval_platform/                 # Pacote principal
 │   └── qdrant_provider.py         # QdrantVectorStoreProvider (Singleton) + VectorStoreError
 ├── llm/
 │   ├── __init__.py
-│   ├── base.py                    # LLMProviderBase (ABC, implementa DeepEvalBaseLLM)
-│   ├── openai_provider.py         # OpenAIProvider (wraps ChatOpenAI)
-│   ├── anthropic_provider.py      # AnthropicProvider (wraps ChatAnthropic)
-│   ├── openrouter_provider.py     # OpenRouterProvider (wraps ChatOpenRouter)
+│   ├── base.py                    # LLMProviderBase (ABC própria — NÃO implementa DeepEvalBaseLLM
+│   │                               # diretamente; expõe as_deepeval_model() como escape hatch)
+│   ├── openai_provider.py         # OpenAIProvider (usa deepeval.models.GPTModel)          ✅ pós-M2.1
+│   ├── anthropic_provider.py      # AnthropicProvider (usa deepeval.models.AnthropicModel)  ✅ pós-M2.1
+│   ├── openrouter_provider.py     # OpenRouterProvider (usa deepeval.models.OpenRouterModel) ✅ pós-M2.1
 │   └── factory.py                 # LLMProviderFactory (Factory Method)
 └── repositories/
     ├── __init__.py
@@ -647,7 +650,7 @@ DRY_RUN=false
 |---------|--------|---------|
 | Modelo juiz padrão (gpt-4o-mini vs Ollama local) | Flexível via `.env` — não bloqueia | Custo vs precisão |
 | Flowise — `overrideConfig.systemPrompt` no request | A investigar no M6 (não bloqueia V1) | Define se a otimização de prompt em bots Flowise pode ser automática |
-| `TokenUsage` — tipo nativo do DeepEval ou custom | A confirmar durante a implementação de módulos que o consomem (M1 já deixou como tipo condicional) | Baixo — decisão local, não afeta arquitetura |
+| `TokenUsage` para modelo juiz custom/não listado (OpenAI/Anthropic) | Resolvido para OpenRouter (pós-M2.1, ver §2.8); limitação latente para OpenAI/Anthropic com modelo fora da tabela de preços estática do DeepEval — revisitar se um modelo customizado for configurado | Baixo — nada no código consome `TokenUsage` ainda |
 
 ---
 
