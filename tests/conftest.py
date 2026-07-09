@@ -49,7 +49,7 @@ def mock_config(mocker):
     config.get_optional.side_effect = lambda key, default="": _STUB_ALL.get(key, default)
     config.get_typed.side_effect = lambda key, t: t(_STUB_ALL[key])
     mocker.patch(
-        "deepeval.config.config_manager.ConfigManager.instance",
+        "deepeval_platform.config.config_manager.ConfigManager.instance",
         return_value=config,
     )
     return config
@@ -60,7 +60,7 @@ def reset_config_singleton():
     """Reset ConfigManager singleton state after every test to prevent leakage."""
     yield
     try:
-        from deepeval.config.config_manager import ConfigManager
+        from deepeval_platform.config.config_manager import ConfigManager
         ConfigManager._instance = None
         ConfigManager._loaded = False
     except ImportError:

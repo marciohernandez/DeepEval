@@ -12,8 +12,8 @@ import urllib.request
 import json
 from datetime import datetime
 
-from deepeval.config.config_manager import ConfigManager
-from deepeval.repositories.models import TraceRecord
+from deepeval_platform.config.config_manager import ConfigManager
+from deepeval_platform.repositories.models import TraceRecord
 
 
 class TraceRepositoryError(Exception):

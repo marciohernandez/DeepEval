@@ -1,13 +1,13 @@
 """Contract: TraceExtractorBase ABC and platform-specific subclasses (M2.1).
 
 This file defines the public interface surface — not runnable production code.
-The real implementations live in deepeval/collection/.
+The real implementations live in deepeval_platform/collection/.
 """
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from deepeval.repositories.models import TraceRecord
+from deepeval_platform.repositories.models import TraceRecord
 from specs.contracts.trace_filter import InteractionStatus  # noqa: F401 (interface reference)
 
 

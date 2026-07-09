@@ -6,8 +6,8 @@ from uuid import UUID
 
 from supabase import create_client
 
-from deepeval.config.config_manager import ConfigManager
-from deepeval.repositories.models import EvaluationResult
+from deepeval_platform.config.config_manager import ConfigManager
+from deepeval_platform.repositories.models import EvaluationResult
 
 _TABLE = "evaluation_results"
 

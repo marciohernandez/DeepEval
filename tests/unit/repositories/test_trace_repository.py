@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deepeval.repositories.models import TraceRecord
-from deepeval.repositories.trace_repository import TraceRepository, TraceRepositoryError
+from deepeval_platform.repositories.models import TraceRecord
+from deepeval_platform.repositories.trace_repository import TraceRepository, TraceRepositoryError
 
 
 def _make_raw_trace(**overrides) -> dict:

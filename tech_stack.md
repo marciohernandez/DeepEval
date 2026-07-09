@@ -165,7 +165,7 @@ result = chain.invoke(input, config={"callbacks": [handler]})
 
 > 🔄 **Correção pós-M1:** o documento original listava `qdrant-client ^1.18.0` como dependência direta. A regra "LangChain First" (§2.4) levou à descoberta, via MCP, de que `langchain_qdrant.QdrantVectorStore` é a integração nativa recomendada — ela já oferece `add_documents`, `similarity_search` e `.as_retriever()` prontos para uso em LangChain/LangGraph. `qdrant-client` continua presente no projeto, mas como dependência **transitiva** de `langchain-qdrant`, não para uso direto.
 >
-> ⚠️ **Achado (pós-M2.1, pendente de decisão):** o uso do Qdrant aqui é para **armazenar datasets de avaliação e embeddings** (golden-sets, busca semântica de traces) — domínio de avaliação (Principle II, DeepEval-First), não orquestração de bot. A checagem que levou a `langchain_qdrant.QdrantVectorStore` consultou apenas o MCP do LangChain, sob a regra antiga. Não foi avaliado se o próprio DeepEval oferece um caminho nativo equivalente para persistência de datasets/embeddings antes de adotar a dependência do LangChain. Já implementado em `deepeval/vector_store/qdrant_provider.py` (M1) — requer decisão e possível refatoração à parte, fora do escopo desta atualização de documentação.
+> ⚠️ **Achado (pós-M2.1, pendente de decisão):** o uso do Qdrant aqui é para **armazenar datasets de avaliação e embeddings** (golden-sets, busca semântica de traces) — domínio de avaliação (Principle II, DeepEval-First), não orquestração de bot. A checagem que levou a `langchain_qdrant.QdrantVectorStore` consultou apenas o MCP do LangChain, sob a regra antiga. Não foi avaliado se o próprio DeepEval oferece um caminho nativo equivalente para persistência de datasets/embeddings antes de adotar a dependência do LangChain. Já implementado em `deepeval_platform/vector_store/qdrant_provider.py` (M1) — requer decisão e possível refatoração à parte, fora do escopo desta atualização de documentação.
 
 **Uso no sistema:**
 - Datasets de golden-set para avaliações (conjuntos de perguntas + respostas esperadas)
@@ -188,19 +188,23 @@ O sistema adota uma **arquitetura de providers extensível**: qualquer ponto que
 
 > 🔄 **Correção pós-M1 — OpenRouter:** o documento original dizia que o OpenRouter usaria o mesmo SDK da OpenAI, só trocando a `base_url`. A consulta ao MCP do LangChain (Principle III, renumerado — era "Principle II" nesta nota antes da v1.1.0 da constituição) encontrou orientação explícita da documentação contra essa abordagem — *"For OpenRouter, prefer the dedicated integration `ChatOpenRouter`"* e *"non-standard response fields from third-party providers are not extracted or preserved [por `ChatOpenAI`]"*. A decisão final foi usar o pacote dedicado `langchain-openrouter` (`ChatOpenRouter`), verificado em `0.2.4` no PyPI, compatível com `langchain-core >= 1.4.7`. **O workaround `ChatOpenAI + base_url` não deve mais ser usado.**
 >
-> ⚠️ **Achado (pós-M2.1, pendente de decisão):** este provider serve como **modelo juiz para métricas DeepEval** (`LLMProviderBase` implementa `DeepEvalBaseLLM`) — ou seja, é domínio de avaliação (Principle II, DeepEval-First), não orquestração de bot. A checagem que resultou em `ChatOpenRouter` consultou apenas o MCP do LangChain; o DeepEval `4.0.7` já embute wrappers nativos `DeepEvalBaseLLM` para esse papel — `deepeval.models.llms.openrouter_model.OpenRouterModel`, além de `openai_model.py` e `anthropic_model.py` equivalentes — que nunca foram avaliados como alternativa. Mesma situação em `deepeval/llm/openai_provider.py` e `anthropic_provider.py` (ambos envolvem `langchain_openai`/`langchain_anthropic`). Não alterado nesta atualização — é uma mudança em código já implementado no M1, requer decisão e possível refatoração à parte.
+> ⚠️ **Achado (pós-M2.1, pendente de decisão):** este provider serve como **modelo juiz para métricas DeepEval** (`LLMProviderBase` alega implementar `DeepEvalBaseLLM`) — ou seja, é domínio de avaliação (Principle II, DeepEval-First), não orquestração de bot. A checagem que resultou em `ChatOpenRouter` consultou apenas o MCP do LangChain; o DeepEval `4.0.7` já embute wrappers nativos `DeepEvalBaseLLM` para esse papel — `deepeval.models.llms.openrouter_model.OpenRouterModel`, além de `openai_model.py` e `anthropic_model.py` equivalentes — que nunca foram avaliados como alternativa. Mesma situação em `deepeval_platform/llm/openai_provider.py` e `anthropic_provider.py` (ambos envolvem `langchain_openai`/`langchain_anthropic`).
+>
+> ⚠️ **Correção adicional (pós-M2.1):** `LLMProviderBase` (`deepeval_platform/llm/base.py`) na verdade **não herda** de `DeepEvalBaseLLM` — o código-fonte tem uma nota (`T036a`) explicando que isso era impossível no M1 porque o pacote local `deepeval/` (nome antigo) fazia *shadowing* da biblioteca `deepeval` instalada, impedindo `from deepeval.models import DeepEvalBaseLLM` de resolver para a lib real. Isso já foi corrigido — o pacote foi renomeado para `deepeval_platform/` nesta atualização, então `import deepeval` de dentro do projeto agora resolve corretamente para a biblioteca. A parte de código (usar `DeepEvalBaseLLM`/`OpenAIModel`/`AnthropicModel`/`OpenRouterModel` nativos em vez dos wrappers LangChain) continua **não implementada** — é uma mudança em código já implementado no M1, requer decisão e possível refatoração à parte.
 
 #### Arquitetura de abstração
 
 ```
-LLMProviderBase (DeepEvalBaseLLM)
+LLMProviderBase (ABC própria — NÃO herda DeepEvalBaseLLM, ver correção abaixo)
     ├── OpenAIProvider       (wraps ChatOpenAI)
     ├── AnthropicProvider    (wraps ChatAnthropic)
     ├── OpenRouterProvider   (wraps ChatOpenRouter)  🔄
     └── [FuturoProvider]  ← adicionar novo provider = criar nova subclasse
 ```
 
-- `LLMProviderBase` implementa `DeepEvalBaseLLM` — integração nativa com todas as métricas DeepEval
+> 🔄 **Correção (pós-M2.1):** `LLMProviderBase` NÃO implementa `DeepEvalBaseLLM` — é uma ABC própria do projeto que replica o mesmo contrato manualmente (`generate`/`a_generate` retornando `TokenUsage` local). Ver achado em §2.8 acima para o motivo (shadowing de pacote, já corrigido) e a decisão de refatoração ainda pendente.
+
+- `LLMProviderBase` **ainda não** implementa `DeepEvalBaseLLM` — ver correção acima
 - Cada `LLMProviderBase` mantém internamente um `_lc_model` (o chat model do LangChain) e delega a ele — confirmado no M1 (`data-model.md`)
 - `LLMProviderFactory.create(provider, model)` — instancia o provider correto a partir do `.env`
 - Adicionar novo provider = criar uma subclasse + registrar na Factory, **sem tocar no restante do sistema** (validado no M1 como critério de sucesso SC-006)
@@ -505,10 +509,16 @@ pytest-mock>=3.15.1
 
 > 🔄 **Seção reescrita pós-M1.** Antes só existia a estrutura de `config/`; agora inclui a árvore real do código-fonte, confirmada em `specs/001-m1-foundation-infrastructure/plan.md`.
 
-### 5.1 Código-fonte (`deepeval/`)
+### 5.1 Código-fonte (`deepeval_platform/`)
+
+> 🔄 **Correção (pós-M2.1):** o pacote principal foi renomeado de `deepeval/` para
+> `deepeval_platform/`. O nome original colidia com a biblioteca `deepeval` instalada via PyPI —
+> qualquer `import deepeval` feito de dentro do próprio pacote resolvia para si mesmo (shadowing),
+> tornando impossível herdar/usar classes nativas do DeepEval (`DeepEvalBaseLLM`, métricas, etc.)
+> diretamente. Ver `.specify/memory/constitution.md` Princípio II (DeepEval-First).
 
 ```text
-deepeval/                          # Pacote principal
+deepeval_platform/                 # Pacote principal
 ├── __init__.py
 ├── config/
 │   ├── __init__.py

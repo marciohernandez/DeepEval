@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from deepeval.config.config_manager import ConfigError
-from deepeval.llm.base import LLMProviderError, TokenUsage
-from deepeval.llm.openrouter_provider import OpenRouterProvider
+from deepeval_platform.config.config_manager import ConfigError
+from deepeval_platform.llm.base import LLMProviderError, TokenUsage
+from deepeval_platform.llm.openrouter_provider import OpenRouterProvider
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def mock_lc(mock_config):
     mock_lc_instance.invoke.return_value = mock_response
     mock_lc_instance.ainvoke = AsyncMock(return_value=mock_response)
 
-    with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
+    with patch("deepeval_platform.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
         yield mock_lc_instance
 
 
@@ -43,7 +43,7 @@ class TestOpenRouterProviderConfig:
             return original(key)
 
         mock_config.get.side_effect = raise_for_api_key
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter"):
+        with patch("deepeval_platform.llm.openrouter_provider.ChatOpenRouter"):
             with pytest.raises(LLMProviderError):
                 OpenRouterProvider()
 
@@ -51,7 +51,7 @@ class TestOpenRouterProviderConfig:
 class TestOpenRouterProviderLCModel:
     def test_wraps_chat_openrouter_not_chat_openai(self, mock_lc, mock_config):
         """Verifies ChatOpenRouter is used (not ChatOpenAI) — FR-009 / plan Gate 5."""
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter") as mock_or:
+        with patch("deepeval_platform.llm.openrouter_provider.ChatOpenRouter") as mock_or:
             mock_or.return_value = MagicMock()
             OpenRouterProvider()
             assert mock_or.called
@@ -78,7 +78,7 @@ class TestOpenRouterProviderGenerate:
         mock_lc_instance = MagicMock()
         mock_lc_instance.invoke.return_value = mock_response
 
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
             provider = OpenRouterProvider()
             text, usage = provider.generate("prompt")
 
@@ -93,7 +93,7 @@ class TestOpenRouterProviderGenerate:
         mock_lc_instance = MagicMock()
         mock_lc_instance.invoke.return_value = mock_response
 
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
             provider = OpenRouterProvider()
             text, usage = provider.generate("prompt")
 
@@ -112,7 +112,7 @@ class TestOpenRouterProviderGenerate:
         mock_lc_instance = MagicMock()
         mock_lc_instance.invoke.side_effect = auth_exc
 
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
             provider = OpenRouterProvider()
             with pytest.raises(Exception, match="Authentication failed"):
                 provider.generate("test")

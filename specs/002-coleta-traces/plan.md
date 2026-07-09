@@ -87,7 +87,7 @@ specs/002-coleta-traces/
 ### Source Code (repository root)
 
 ```text
-deepeval/
+deepeval_platform/
 ├── collection/                          # NEW — M2.1
 │   ├── __init__.py
 │   ├── trace_filter.py                  # InteractionStatus, TraceFilter
@@ -153,22 +153,22 @@ No constitution violations. All additions are new subclasses or new modules foll
 
 **A1 — `InteractionStatus` + `TraceFilter`**
 - Write `test_trace_filter.py` (RED): valid construction; `start >= end` → `ValueError`; empty `bot_id` → `ValueError`
-- Implement `deepeval/collection/trace_filter.py`
+- Implement `deepeval_platform/collection/trace_filter.py`
 - Green + refactor
 
 **A2 — `TraceExtractorBase` ABC**
 - Write `test_extractor_base.py` (RED): cannot instantiate directly; abstract method enforced
-- Implement `deepeval/collection/extractor_base.py`
+- Implement `deepeval_platform/collection/extractor_base.py`
 - Green + refactor
 
 **A3 — `FlowiseExtractor`**
 - Write `test_flowise_extractor.py` (RED): completed filter; interrupted filter; no filter; empty input; records without output treated as interrupted
-- Implement `deepeval/collection/extractors/flowise_extractor.py`
+- Implement `deepeval_platform/collection/extractors/flowise_extractor.py`
 - Green + refactor
 
 **A4 — `LangChainExtractor`**
 - Write `test_langchain_extractor.py` (RED): same shape tests as Flowise; validates LangChain output dict structure
-- Implement `deepeval/collection/extractors/langchain_extractor.py`
+- Implement `deepeval_platform/collection/extractors/langchain_extractor.py`
 - Green + refactor
 
 **A5 — `TraceCollector`**
@@ -180,7 +180,7 @@ No constitution violations. All additions are new subclasses or new modules foll
   - Emits WARNING when truncating
   - Returns [] on empty result
   - Propagates `TraceRepositoryError` immediately (no retry)
-- Implement `deepeval/collection/trace_collector.py`
+- Implement `deepeval_platform/collection/trace_collector.py`
 - Green + refactor
 
 **A6 — Update `config/bots.yaml`**
@@ -192,32 +192,32 @@ No constitution violations. All additions are new subclasses or new modules foll
 
 **B1 — `BotType` + `InvalidBotTypeError`**
 - Write `test_bot_type.py` (RED): valid lowercase coercion; `"unknown"` → `ValueError`; `None` → `ValueError`; `""` → `ValueError`; `InvalidBotTypeError` message contains received + supported list
-- Implement `deepeval/evaluation/bot_type.py`
+- Implement `deepeval_platform/evaluation/bot_type.py`
 - Green + refactor
 
 **B2 — `EvaluationStrategyBase` ABC**
 - Write `test_strategy_base.py` (RED): cannot instantiate; abstract method enforced
-- Implement `deepeval/evaluation/strategy_base.py`
+- Implement `deepeval_platform/evaluation/strategy_base.py`
 - Green + refactor
 
 **B3 — `RAGStrategy`**
 - Write `test_rag_strategy.py` (RED): non-empty list; all strings; stable across calls; contains expected metric names
-- Implement `deepeval/evaluation/strategies/rag_strategy.py`
+- Implement `deepeval_platform/evaluation/strategies/rag_strategy.py`
 - Green + refactor
 
 **B4 — `AgentStrategy`**
 - Write `test_agent_strategy.py` (RED): same shape tests; distinct from RAG set
-- Implement `deepeval/evaluation/strategies/agent_strategy.py`
+- Implement `deepeval_platform/evaluation/strategies/agent_strategy.py`
 - Green + refactor
 
 **B5 — `ConversationStrategy`**
 - Write `test_conversation_strategy.py` (RED): same shape tests; distinct from RAG and Agent sets
-- Implement `deepeval/evaluation/strategies/conversation_strategy.py`
+- Implement `deepeval_platform/evaluation/strategies/conversation_strategy.py`
 - Green + refactor
 
 **B6 — `StrategyFactory`**
 - Write `test_strategy_factory.py` (RED): correct type for each BotType; raw string coercion works; `"unknown"` → `InvalidBotTypeError`; `None` → `InvalidBotTypeError`; `""` → `InvalidBotTypeError`; error message correct
-- Implement `deepeval/evaluation/strategy_factory.py`
+- Implement `deepeval_platform/evaluation/strategy_factory.py`
 - Green + refactor
 
 ---
@@ -235,7 +235,7 @@ No constitution violations. All additions are new subclasses or new modules foll
 
 ```bash
 uv run pytest tests/unit/collection/ tests/unit/evaluation/ \
-    --cov=deepeval/collection --cov=deepeval/evaluation \
+    --cov=deepeval_platform/collection --cov=deepeval_platform/evaluation \
     --cov-report=term-missing --cov-fail-under=80
 ```
 

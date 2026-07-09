@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from deepeval.llm.base import LLMProviderError, TokenUsage
-from deepeval.llm.factory import LLMProviderFactory
+from deepeval_platform.llm.base import LLMProviderError, TokenUsage
+from deepeval_platform.llm.factory import LLMProviderFactory
 
 
 @pytest.mark.integration

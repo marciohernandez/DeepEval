@@ -1,7 +1,7 @@
 """Contract: EvaluationStrategyBase, BotType, StrategyFactory (M2.1).
 
 This file defines the public interface surface — not runnable production code.
-The real implementations live in deepeval/evaluation/.
+The real implementations live in deepeval_platform/evaluation/.
 """
 from __future__ import annotations
 

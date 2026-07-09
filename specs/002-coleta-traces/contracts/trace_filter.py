@@ -1,7 +1,7 @@
 """Contract: TraceFilter value object and InteractionStatus enum (M2.1).
 
 This file defines the public interface surface — not runnable production code.
-The real implementation lives in deepeval/collection/trace_filter.py.
+The real implementation lives in deepeval_platform/collection/trace_filter.py.
 """
 from __future__ import annotations
 

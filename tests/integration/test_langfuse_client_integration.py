@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from deepeval.observability import LangfuseClient, TelemetryEvent
+from deepeval_platform.observability import LangfuseClient, TelemetryEvent
 
 
 @pytest.fixture(autouse=True)

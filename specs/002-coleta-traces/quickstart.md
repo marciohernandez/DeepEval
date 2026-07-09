@@ -44,7 +44,7 @@ Run with coverage (gate ≥ 80%):
 
 ```bash
 uv run pytest tests/unit/collection/ tests/unit/evaluation/ \
-    --cov=deepeval/collection --cov=deepeval/evaluation \
+    --cov=deepeval_platform/collection --cov=deepeval_platform/evaluation \
     --cov-report=term-missing --cov-fail-under=80
 ```
 
@@ -80,9 +80,9 @@ uv run pytest tests/integration/test_trace_collector_integration.py -v
 
 ```python
 from datetime import datetime, timezone, timedelta
-from deepeval.collection.trace_filter import TraceFilter, InteractionStatus
-from deepeval.collection.trace_collector import TraceCollector
-from deepeval.repositories.trace_repository import TraceRepository
+from deepeval_platform.collection.trace_filter import TraceFilter, InteractionStatus
+from deepeval_platform.collection.trace_collector import TraceCollector
+from deepeval_platform.repositories.trace_repository import TraceRepository
 
 repo = TraceRepository()
 collector = TraceCollector(repo)
@@ -130,7 +130,7 @@ assert results == []
 Disconnect from Langfuse (invalid host in `.env`), then:
 
 ```python
-from deepeval.repositories.trace_repository import TraceRepositoryError
+from deepeval_platform.repositories.trace_repository import TraceRepositoryError
 import pytest
 
 with pytest.raises(TraceRepositoryError):
@@ -146,8 +146,8 @@ Expected: error raised immediately, no retry.
 Verify all three built-in strategies return distinct, non-empty metric lists:
 
 ```python
-from deepeval.evaluation.strategy_factory import StrategyFactory
-from deepeval.evaluation.bot_type import BotType
+from deepeval_platform.evaluation.strategy_factory import StrategyFactory
+from deepeval_platform.evaluation.bot_type import BotType
 
 rag = StrategyFactory.create(BotType.RAG)
 agent = StrategyFactory.create(BotType.AGENT)
@@ -168,7 +168,7 @@ assert set(agent_metrics) != set(conv_metrics)
 Also verify error path:
 
 ```python
-from deepeval.evaluation.bot_type import InvalidBotTypeError
+from deepeval_platform.evaluation.bot_type import InvalidBotTypeError
 
 try:
     StrategyFactory.create("unknown_type")

@@ -8,7 +8,7 @@
 
 ### TraceRecord *(M1 — unchanged)*
 
-Defined in `deepeval/repositories/models.py`. Consumed here without modification.
+Defined in `deepeval_platform/repositories/models.py`. Consumed here without modification.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -26,7 +26,7 @@ Defined in `deepeval/repositories/models.py`. Consumed here without modification
 ### InteractionStatus *(new — collection layer)*
 
 ```python
-# deepeval/collection/trace_filter.py
+# deepeval_platform/collection/trace_filter.py
 class InteractionStatus(str, Enum):
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
@@ -39,7 +39,7 @@ class InteractionStatus(str, Enum):
 ### TraceFilter *(new — value object)*
 
 ```python
-# deepeval/collection/trace_filter.py
+# deepeval_platform/collection/trace_filter.py
 @dataclass(frozen=True)
 class TraceFilter:
     bot_id: str
@@ -59,7 +59,7 @@ class TraceFilter:
 ### BotType *(new — evaluation layer)*
 
 ```python
-# deepeval/evaluation/bot_type.py
+# deepeval_platform/evaluation/bot_type.py
 class BotType(str, Enum):
     RAG = "rag"
     AGENT = "agent"
@@ -75,7 +75,7 @@ class BotType(str, Enum):
 ### InvalidBotTypeError *(new — evaluation layer)*
 
 ```python
-# deepeval/evaluation/bot_type.py
+# deepeval_platform/evaluation/bot_type.py
 class InvalidBotTypeError(ValueError):
     def __init__(self, received: object) -> None:
         supported = [bt.value for bt in BotType]
@@ -92,7 +92,7 @@ class InvalidBotTypeError(ValueError):
 ### TraceExtractorBase *(new — collection layer)*
 
 ```python
-# deepeval/collection/extractor_base.py
+# deepeval_platform/collection/extractor_base.py
 class TraceExtractorBase(ABC):
     @abstractmethod
     def extract(
@@ -105,15 +105,15 @@ class TraceExtractorBase(ABC):
 **Responsibility**: apply platform-specific status filtering and field normalization. Does not sort or cap — those are `TraceCollector` concerns.
 
 **Concrete implementations**:
-- `FlowiseExtractor` (`deepeval/collection/extractors/flowise_extractor.py`) — handles Flowise trace output shapes
-- `LangChainExtractor` (`deepeval/collection/extractors/langchain_extractor.py`) — handles LangChain/LangGraph trace output shapes
+- `FlowiseExtractor` (`deepeval_platform/collection/extractors/flowise_extractor.py`) — handles Flowise trace output shapes
+- `LangChainExtractor` (`deepeval_platform/collection/extractors/langchain_extractor.py`) — handles LangChain/LangGraph trace output shapes
 
 ---
 
 ### EvaluationStrategyBase *(new — evaluation layer)*
 
 ```python
-# deepeval/evaluation/strategy_base.py
+# deepeval_platform/evaluation/strategy_base.py
 class EvaluationStrategyBase(ABC):
     @abstractmethod
     def get_metrics(self) -> list[str]: ...
@@ -133,7 +133,7 @@ class EvaluationStrategyBase(ABC):
 ### TraceCollector *(new)*
 
 ```python
-# deepeval/collection/trace_collector.py
+# deepeval_platform/collection/trace_collector.py
 class TraceCollector:
     MAX_INTERACTIONS: ClassVar[int] = 500
     
@@ -158,7 +158,7 @@ class TraceCollector:
 ### StrategyFactory *(new)*
 
 ```python
-# deepeval/evaluation/strategy_factory.py
+# deepeval_platform/evaluation/strategy_factory.py
 class StrategyFactory:
     _registry: ClassVar[dict[BotType, type[EvaluationStrategyBase]]] = {
         BotType.RAG: RAGStrategy,
@@ -179,7 +179,7 @@ class StrategyFactory:
 ## Module Dependency Graph
 
 ```
-deepeval/
+deepeval_platform/
 │
 ├── config/config_manager.py          [M1 — singleton, read-only here]
 ├── repositories/

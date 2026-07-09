@@ -1,4 +1,4 @@
-from deepeval.vector_store.qdrant_provider import (
+from deepeval_platform.vector_store.qdrant_provider import (
     QdrantVectorStoreProvider,
     VectorCollection,
     VectorStoreError,

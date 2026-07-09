@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from deepeval.repositories.evaluation_repository import EvaluationRepository, RepositoryError
-from deepeval.repositories.models import EvaluationResult
+from deepeval_platform.repositories.evaluation_repository import EvaluationRepository, RepositoryError
+from deepeval_platform.repositories.models import EvaluationResult
 
 
 def _make_result(**overrides) -> EvaluationResult:
@@ -107,7 +107,7 @@ class TestSchemaValidationIntegration:
     def test_evaluation_results_table_has_expected_columns(self, repo):
         """Fails fast if migration was never applied (T049 spec requirement)."""
         from supabase import create_client
-        from deepeval.config.config_manager import ConfigManager
+        from deepeval_platform.config.config_manager import ConfigManager
 
         config = ConfigManager.instance()
         url = config.get("SUPABASE_URL")

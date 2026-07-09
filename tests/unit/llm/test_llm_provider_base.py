@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deepeval.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
+from deepeval_platform.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
 
 
 class TestLLMProviderBaseIsABC:

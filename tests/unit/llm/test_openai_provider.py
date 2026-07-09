@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from deepeval.config.config_manager import ConfigError
-from deepeval.llm.base import LLMProviderError, TokenUsage
-from deepeval.llm.openai_provider import OpenAIProvider
+from deepeval_platform.config.config_manager import ConfigError
+from deepeval_platform.llm.base import LLMProviderError, TokenUsage
+from deepeval_platform.llm.openai_provider import OpenAIProvider
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def mock_lc(mock_config):
     mock_lc_instance.invoke.return_value = mock_response
     mock_lc_instance.ainvoke = AsyncMock(return_value=mock_response)
 
-    with patch("deepeval.llm.openai_provider.ChatOpenAI", return_value=mock_lc_instance):
+    with patch("deepeval_platform.llm.openai_provider.ChatOpenAI", return_value=mock_lc_instance):
         yield mock_lc_instance
 
 
@@ -35,7 +35,7 @@ class TestOpenAIProviderConfig:
         mock_config.get.assert_any_call("openai.default_model")
 
     def test_model_arg_overrides_config_default(self, mock_config):
-        with patch("deepeval.llm.openai_provider.ChatOpenAI") as mock_chat:
+        with patch("deepeval_platform.llm.openai_provider.ChatOpenAI") as mock_chat:
             mock_chat.return_value = MagicMock()
             provider = OpenAIProvider(model="gpt-4-turbo")
             assert provider.model_name == "gpt-4-turbo"
@@ -51,7 +51,7 @@ class TestOpenAIProviderConfig:
             return original(key)
 
         mock_config.get.side_effect = raise_for_api_key
-        with patch("deepeval.llm.openai_provider.ChatOpenAI"):
+        with patch("deepeval_platform.llm.openai_provider.ChatOpenAI"):
             with pytest.raises(LLMProviderError):
                 OpenAIProvider()
 
@@ -83,7 +83,7 @@ class TestOpenAIProviderGenerate:
         mock_lc_instance = MagicMock()
         mock_lc_instance.invoke.return_value = mock_response
 
-        with patch("deepeval.llm.openai_provider.ChatOpenAI", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.openai_provider.ChatOpenAI", return_value=mock_lc_instance):
             provider = OpenAIProvider()
             text, usage = provider.generate("prompt")
 
@@ -105,7 +105,7 @@ class TestOpenAIProviderGenerate:
         mock_lc_instance = MagicMock()
         mock_lc_instance.invoke.side_effect = auth_exc
 
-        with patch("deepeval.llm.openai_provider.ChatOpenAI", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.openai_provider.ChatOpenAI", return_value=mock_lc_instance):
             provider = OpenAIProvider()
             with pytest.raises(Exception, match="Authentication failed"):
                 provider.generate("test")

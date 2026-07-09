@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from deepeval.config.config_manager import ConfigError
-from deepeval.llm.base import LLMProviderError, TokenUsage
-from deepeval.llm.anthropic_provider import AnthropicProvider
+from deepeval_platform.config.config_manager import ConfigError
+from deepeval_platform.llm.base import LLMProviderError, TokenUsage
+from deepeval_platform.llm.anthropic_provider import AnthropicProvider
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def mock_lc(mock_config):
     mock_lc_instance.invoke.return_value = mock_response
     mock_lc_instance.ainvoke = AsyncMock(return_value=mock_response)
 
-    with patch("deepeval.llm.anthropic_provider.ChatAnthropic", return_value=mock_lc_instance):
+    with patch("deepeval_platform.llm.anthropic_provider.ChatAnthropic", return_value=mock_lc_instance):
         yield mock_lc_instance
 
 
@@ -42,7 +42,7 @@ class TestAnthropicProviderConfig:
             return original(key)
 
         mock_config.get.side_effect = raise_for_api_key
-        with patch("deepeval.llm.anthropic_provider.ChatAnthropic"):
+        with patch("deepeval_platform.llm.anthropic_provider.ChatAnthropic"):
             with pytest.raises(LLMProviderError):
                 AnthropicProvider()
 
@@ -76,7 +76,7 @@ class TestAnthropicProviderGenerate:
         mock_lc_instance = MagicMock()
         mock_lc_instance.invoke.side_effect = auth_exc
 
-        with patch("deepeval.llm.anthropic_provider.ChatAnthropic", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.anthropic_provider.ChatAnthropic", return_value=mock_lc_instance):
             provider = AnthropicProvider()
             with pytest.raises(Exception, match="Authentication failed"):
                 provider.generate("test")

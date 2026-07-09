@@ -119,6 +119,6 @@ All metric names are canonical DeepEval metric name strings. `MetricFactory` (M3
 
 ## Decision 6 — InteractionStatus enum placement
 
-**Decision**: Define `class InteractionStatus(str, Enum)` with values `completed` and `interrupted` in `deepeval/collection/trace_filter.py` alongside `TraceFilter`, since both are collection-layer concepts.
+**Decision**: Define `class InteractionStatus(str, Enum)` with values `completed` and `interrupted` in `deepeval_platform/collection/trace_filter.py` alongside `TraceFilter`, since both are collection-layer concepts.
 
 **Rationale**: `TraceFilter` is the only consumer of `InteractionStatus` in V1. Co-location avoids a standalone one-member module. If `EvaluationRepository` needs it in M3, it can import from the collection layer without circular deps (collection ↔ evaluation is one-way: evaluation depends on collection output, not vice versa).

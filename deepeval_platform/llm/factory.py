@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from deepeval.llm.base import LLMProviderBase, LLMProviderError
-from deepeval.llm.anthropic_provider import AnthropicProvider
-from deepeval.llm.openai_provider import OpenAIProvider
-from deepeval.llm.openrouter_provider import OpenRouterProvider
+from deepeval_platform.llm.base import LLMProviderBase, LLMProviderError
+from deepeval_platform.llm.anthropic_provider import AnthropicProvider
+from deepeval_platform.llm.openai_provider import OpenAIProvider
+from deepeval_platform.llm.openrouter_provider import OpenRouterProvider
 
 
 class LLMProviderFactory:

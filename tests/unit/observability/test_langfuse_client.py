@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deepeval.observability.langfuse_client import (
+from deepeval_platform.observability.langfuse_client import (
     LangfuseClient,
     LangfuseError,
     TelemetryEvent,
@@ -80,21 +80,21 @@ class TestTelemetryEvent:
 
 class TestLangfuseClientSingleton:
     def test_instance_returns_same_object(self, mock_config):
-        with patch("deepeval.observability.langfuse_client.Langfuse"):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse"):
             with patch("atexit.register"):
                 c1 = LangfuseClient.instance()
                 c2 = LangfuseClient.instance()
                 assert c1 is c2
 
     def test_sdk_initialized_only_once(self, mock_config):
-        with patch("deepeval.observability.langfuse_client.Langfuse") as mock_sdk:
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse") as mock_sdk:
             with patch("atexit.register"):
                 LangfuseClient.instance()
                 LangfuseClient.instance()
                 mock_sdk.assert_called_once()
 
     def test_atexit_registered_exactly_once(self, mock_config):
-        with patch("deepeval.observability.langfuse_client.Langfuse"):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse"):
             with patch("atexit.register") as mock_atexit:
                 LangfuseClient.instance()
                 LangfuseClient.instance()
@@ -107,26 +107,26 @@ class TestLangfuseClientSingleton:
 
 class TestIsConnected:
     def test_true_after_successful_init(self, mock_config):
-        with patch("deepeval.observability.langfuse_client.Langfuse"):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse"):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 assert client.is_connected() is True
 
     def test_false_when_sdk_raises_at_init(self, mock_config):
-        with patch("deepeval.observability.langfuse_client.Langfuse", side_effect=Exception("conn err")):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", side_effect=Exception("conn err")):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 assert client.is_connected() is False
 
     def test_warning_logged_when_sdk_raises_at_init(self, mock_config, caplog):
-        with patch("deepeval.observability.langfuse_client.Langfuse", side_effect=Exception("conn err")):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", side_effect=Exception("conn err")):
             with patch("atexit.register"):
                 with caplog.at_level(logging.WARNING):
                     LangfuseClient.instance()
                 assert any(r.levelno >= logging.WARNING for r in caplog.records)
 
     def test_no_exception_raised_when_sdk_raises_at_init(self, mock_config):
-        with patch("deepeval.observability.langfuse_client.Langfuse", side_effect=Exception("conn err")):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", side_effect=Exception("conn err")):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()  # must not raise
                 assert client is not None
@@ -153,7 +153,7 @@ class TestSubmit:
 
     def test_submit_calls_sdk_batch(self, mock_config):
         mock_sdk = MagicMock()
-        with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 client.submit(self._make_event())
@@ -162,7 +162,7 @@ class TestSubmit:
     def test_submit_passes_correct_fields(self, mock_config):
         mock_sdk = MagicMock()
         start = datetime(2026, 1, 1)
-        with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 event = self._make_event(
@@ -190,7 +190,7 @@ class TestSubmit:
     def test_submit_warning_logged_when_sdk_raises(self, mock_config, caplog):
         mock_sdk = MagicMock()
         mock_sdk.api.ingestion.batch.side_effect = Exception("SDK boom")
-        with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 with caplog.at_level(logging.WARNING):
                     client = LangfuseClient.instance()
@@ -200,7 +200,7 @@ class TestSubmit:
     def test_submit_no_exception_when_sdk_raises(self, mock_config):
         mock_sdk = MagicMock()
         mock_sdk.api.ingestion.batch.side_effect = Exception("SDK boom")
-        with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 client.submit(self._make_event())  # must not raise
@@ -208,7 +208,7 @@ class TestSubmit:
     def test_submit_noop_when_not_connected(self, mock_config, caplog):
         """When SDK failed to init, submit logs WARNING and returns without SDK call."""
         mock_sdk = MagicMock()
-        with patch("deepeval.observability.langfuse_client.Langfuse", side_effect=Exception("init err")):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", side_effect=Exception("init err")):
             with patch("atexit.register"):
                 with caplog.at_level(logging.WARNING):
                     client = LangfuseClient.instance()
@@ -225,7 +225,7 @@ class TestSubmit:
 class TestFlush:
     def test_flush_calls_sdk_flush(self, mock_config):
         mock_sdk = MagicMock()
-        with patch("deepeval.observability.langfuse_client.Langfuse", return_value=mock_sdk):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", return_value=mock_sdk):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 client.flush()
@@ -233,7 +233,7 @@ class TestFlush:
 
     def test_flush_noop_when_not_connected(self, mock_config):
         """flush() must not raise when SDK never initialized."""
-        with patch("deepeval.observability.langfuse_client.Langfuse", side_effect=Exception("init err")):
+        with patch("deepeval_platform.observability.langfuse_client.Langfuse", side_effect=Exception("init err")):
             with patch("atexit.register"):
                 client = LangfuseClient.instance()
                 client.flush()  # must not raise

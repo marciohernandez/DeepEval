@@ -11,7 +11,7 @@ from typing import ClassVar
 from langfuse import Langfuse
 from langfuse.api.ingestion.types import IngestionEvent_TraceCreate, TraceBody
 
-from deepeval.config.config_manager import ConfigManager
+from deepeval_platform.config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 

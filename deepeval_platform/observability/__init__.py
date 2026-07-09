@@ -1,4 +1,4 @@
-from deepeval.observability.langfuse_client import (
+from deepeval_platform.observability.langfuse_client import (
     LangfuseClient,
     LangfuseError,
     TelemetryEvent,

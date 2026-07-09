@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from langchain_openai import ChatOpenAI
 
-from deepeval.config.config_manager import ConfigError, ConfigManager
-from deepeval.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
+from deepeval_platform.config.config_manager import ConfigError, ConfigManager
+from deepeval_platform.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
 
 
 class OpenAIProvider(LLMProviderBase):

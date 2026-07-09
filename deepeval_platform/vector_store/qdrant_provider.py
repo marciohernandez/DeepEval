@@ -11,7 +11,7 @@ from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
-from deepeval.config.config_manager import ConfigManager
+from deepeval_platform.config.config_manager import ConfigManager
 
 _COLLECTION_NAME_RE = re.compile(r"[a-zA-Z0-9_-]+")
 

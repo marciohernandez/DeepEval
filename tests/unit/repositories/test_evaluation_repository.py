@@ -8,8 +8,8 @@ from uuid import UUID
 
 import pytest
 
-from deepeval.repositories.models import EvaluationResult
-from deepeval.repositories.evaluation_repository import EvaluationRepository, RepositoryError
+from deepeval_platform.repositories.models import EvaluationResult
+from deepeval_platform.repositories.evaluation_repository import EvaluationRepository, RepositoryError
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ class TestSave:
         result = _make_result()
         sb = _make_supabase_client()
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             returned_id = repo.save(result)
 
@@ -91,7 +91,7 @@ class TestSave:
         result = _make_result(org_id=None)
         sb = _make_supabase_client()
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             repo.save(result)
 
@@ -105,7 +105,7 @@ class TestSave:
         sb = _make_supabase_client()
         sb.execute.side_effect = Exception("DB connection failed")
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             with pytest.raises(RepositoryError):
                 repo.save(result)
@@ -117,7 +117,7 @@ class TestSave:
         original_msg = 'relation "evaluation_results" does not exist'
         sb.execute.side_effect = Exception(original_msg)
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             with pytest.raises(RepositoryError) as exc_info:
                 repo.save(result)
@@ -134,7 +134,7 @@ class TestGetById:
         result = _make_result()
         sb = _make_supabase_client(response_data=[_make_row(result)])
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             fetched = repo.get_by_id(result.id)
 
@@ -145,7 +145,7 @@ class TestGetById:
         result = _make_result(org_id=org)
         sb = _make_supabase_client(response_data=[_make_row(result)])
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             fetched = repo.get_by_id(result.id)
 
@@ -164,7 +164,7 @@ class TestGetById:
         result = _make_result(org_id=None)
         sb = _make_supabase_client(response_data=[_make_row(result)])
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             fetched = repo.get_by_id(result.id)
 
@@ -174,7 +174,7 @@ class TestGetById:
         sb = _make_supabase_client()
         sb.execute.side_effect = Exception("timeout")
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             with pytest.raises(RepositoryError):
                 repo.get_by_id(uuid.uuid4())
@@ -189,7 +189,7 @@ class TestGetByBot:
         result = _make_result()
         sb = _make_supabase_client(response_data=[_make_row(result)])
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             results = repo.get_by_bot("test-bot")
 
@@ -200,7 +200,7 @@ class TestGetByBot:
         result = _make_result(bot_id="my-bot")
         sb = _make_supabase_client(response_data=[_make_row(result)])
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             results = repo.get_by_bot("my-bot")
 
@@ -209,7 +209,7 @@ class TestGetByBot:
     def test_get_by_bot_empty_result_returns_empty_list(self):
         sb = _make_supabase_client(response_data=[])
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             results = repo.get_by_bot("nonexistent-bot")
 
@@ -220,7 +220,7 @@ class TestGetByBot:
         sb = _make_supabase_client(response_data=[_make_row(result)])
         utc_date = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             repo.get_by_bot("test-bot", date=utc_date)
 
@@ -232,7 +232,7 @@ class TestGetByBot:
         non_utc = datetime(2026, 1, 1, tzinfo=timezone(timedelta(hours=-5)))
         sb = _make_supabase_client()
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             with pytest.raises(ValueError):
                 repo.get_by_bot("test-bot", date=non_utc)
@@ -243,7 +243,7 @@ class TestGetByBot:
         sb = _make_supabase_client(response_data=[_make_row(result)])
         naive_date = datetime(2026, 1, 1)
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             results = repo.get_by_bot("test-bot", date=naive_date)
 
@@ -253,7 +253,7 @@ class TestGetByBot:
         sb = _make_supabase_client()
         sb.execute.side_effect = Exception("query failed")
 
-        with patch("deepeval.repositories.evaluation_repository.create_client", return_value=sb):
+        with patch("deepeval_platform.repositories.evaluation_repository.create_client", return_value=sb):
             repo = EvaluationRepository()
             with pytest.raises(RepositoryError):
                 repo.get_by_bot("test-bot")

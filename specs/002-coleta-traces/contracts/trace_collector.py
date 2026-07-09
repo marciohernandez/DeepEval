@@ -1,14 +1,14 @@
 """Contract: TraceCollector public interface (M2.1).
 
 This file defines the public interface surface — not runnable production code.
-The real implementation lives in deepeval/collection/trace_collector.py.
+The real implementation lives in deepeval_platform/collection/trace_collector.py.
 """
 from __future__ import annotations
 
 from typing import ClassVar
 
-from deepeval.repositories.models import TraceRecord
-from deepeval.repositories.trace_repository import TraceRepository
+from deepeval_platform.repositories.models import TraceRecord
+from deepeval_platform.repositories.trace_repository import TraceRepository
 
 
 class TraceCollector:
