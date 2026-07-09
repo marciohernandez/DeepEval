@@ -31,7 +31,7 @@ class QdrantVectorStoreProviderContract:
         QDRANT_API_KEY           (str) — Qdrant API key (sensitive)
 
     Usage:
-        from deepeval.vector_store import QdrantVectorStoreProvider
+        from deepeval_platform.vector_store import QdrantVectorStoreProvider
         provider = QdrantVectorStoreProvider.instance()
         store = provider.get_store("evaluation-goldens")
         store.add_documents(docs)

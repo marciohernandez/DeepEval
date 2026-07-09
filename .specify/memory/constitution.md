@@ -1,58 +1,54 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.0.1 → 1.1.0
-Bump type: MINOR (new principle added: DeepEval-First Development; existing LangChain-First
-  principle redefined/narrowed in scope — renumbered, not removed, so no MAJOR bump)
+Version change: 1.1.0 → 1.2.0
+Bump type: MINOR (Technology Stack substitution — LLM Providers section rewritten to reflect
+  the native-DeepEval-model refactor; this is a stack substitution under the Technology Stack
+  section's own governance rule, requiring MINOR minimum)
 
-Added sections:
-  - Core Principle II — DeepEval-First Development (new)
+Added sections: N/A
 
-Modified principles:
-  - "II. LangChain-First Development" → "III. LangChain-First Development (Bot Orchestration
-    Layer)" — renumbered and scope explicitly narrowed to bot-orchestration/integration code
-    only (chains, retrievers, callbacks, loaders, splitters, memory, agents, tools, output
-    parsers used to connect/instrument bots under evaluation). Explicitly does NOT apply to
-    this system's own evaluation-domain modules (TraceExtractor, EvaluationStrategy,
-    MetricFactory, etc.) — those are governed by the new Principle II (DeepEval-First).
-  - "III. Test-Driven Development" → "IV. Test-Driven Development" (renumbered only)
-  - "IV. Zero Hardcode / Configuration Security" → "V. Zero Hardcode / Configuration Security"
-    (renumbered only)
-  - "V. Extensibility by Design" → "VI. Extensibility by Design" (renumbered only)
+Modified sections:
+  - Technology Stack → LLM Providers: previously stated OpenRouter goes through
+    `langchain-openrouter`/`ChatOpenRouter` and "`LLMProviderBase` MUST implement
+    `DeepEvalBaseLLM`". Both were already false in the shipped code as of commit `3455bfd`
+    (`OpenAIProvider`/`AnthropicProvider`/`OpenRouterProvider` wrap DeepEval's own
+    `GPTModel`/`AnthropicModel`/`OpenRouterModel`; `LLMProviderBase` is a project-local ABC with
+    an `as_deepeval_model()` escape hatch, not a `DeepEvalBaseLLM` implementer) — this amendment
+    brings the constitution's binding stack description back in line with reality and records
+    the substitution as an amendment per the section's own rule ("Substitutions or additions
+    MUST be proposed as constitution amendments").
 
 Removed sections: N/A
 
-Rationale for reordering: DeepEval is this project's primary framework — the evaluation engine,
-metrics, Synthesizer, ConversationSimulator, and PromptOptimizer are the reason the system
-exists (briefing.md §2, §4). LangChain/LangGraph is the orchestration layer for the bots being
-*evaluated* — a secondary, adjacent concern. The prior constitution had no DeepEval-First
-principle at all, while LangChain-First was worded broadly enough ("before writing any code")
-that it was mistakenly applied to pure evaluation-domain design decisions in
-specs/002-coleta-traces/research.md (a "LangChain-First Check" was run for TraceExtractor and
-EvaluationStrategy — abstractions with no relationship to LangChain). This version corrects
-that category error by giving DeepEval its own principle, positioned before LangChain, and by
-scoping LangChain-First explicitly to bot-orchestration code.
+Rationale: a code review of commits `af3d32f`/`3455bfd` (package rename `deepeval/` →
+`deepeval_platform/`, then LLM providers swapped from LangChain chat models to native DeepEval
+judge-model classes) found the constitution had not been updated alongside the code — a
+governance-drift bug where the "binding" Technology Stack section contradicted the shipped
+implementation. This amendment closes that gap without changing the underlying architecture
+decision itself (already reviewed and accepted).
+
+Prior amendment resolved: the v1.1.0 TODO(SPEC_002) — specs/002-coleta-traces/research.md's
+mislabeled "LangChain-First Check" — was manually corrected to "DeepEval-First Check" in the
+same session that produced this v1.2.0 bump; no longer outstanding.
 
 Templates reviewed:
-  ✅ .specify/templates/plan-template.md — "Constitution Check" is a runtime placeholder filled
-     by /speckit-plan; no structural changes required. Gate numbering in Quality Gates section
-     below is updated; /speckit-plan reads gates by name, not fixed index.
-  ✅ .specify/templates/spec-template.md — Generic structure fully compatible; no changes
-     required.
+  ✅ .specify/templates/plan-template.md — no structural changes required.
+  ✅ .specify/templates/spec-template.md — no changes required.
   ⚠  .specify/templates/tasks-template.md — Still marks tests as "OPTIONAL - only if explicitly
      requested," which Principle IV (TDD — NON-NEGOTIABLE) overrides. Carried over from v1.0.1;
      still unresolved.
-  N/A — No commands/ directory found under .specify/templates/; no command files to review.
 
 Follow-up TODOs:
   - TODO(TASKS_TEMPLATE): Update tasks-template.md note to reflect that TDD is NON-NEGOTIABLE
     for this project; tests are never optional here. (Carried over, still open.)
-  - TODO(SPEC_002): specs/002-coleta-traces/research.md performed a "LangChain-First Check" for
-    TraceExtractor/EvaluationStrategy under the old principle numbering. Under this version,
-    that check should have been a "DeepEval-First Check" instead (Principle II). The research
-    document's conclusion (custom implementation required) is still correct, but its framing
-    and principle citation need a manual correction pass — out of scope for this constitution
-    amendment.
+  - TODO(TOKEN_USAGE): `LLMProviderBase._to_token_usage()` reports `TokenUsage(0, 0)` whenever
+    DeepEval's own `calculate_cost()` can't price a call — unconditionally true today for
+    `OpenRouterProvider` (no `cost_per_input_token`/`cost_per_output_token` configured), and
+    latent for OpenAI/Anthropic on any model absent from DeepEval's static pricing tables.
+    Documented as a known limitation (see `tech_stack.md` §2.8) rather than fixed, since nothing
+    in the codebase consumes `TokenUsage` yet. Revisit when a consumer (cost/usage reporting)
+    is built.
 -->
 
 # DeepEval Chatbot Evaluator Constitution
@@ -221,11 +217,17 @@ LangGraph `^1.2.6`, Flowise (self-hosted)
 - Relational V2+: PostgreSQL self-hosted on VPS (swapped via Repository pattern + `DB_PROVIDER`)
 - Vector: Qdrant `^1.18.0` client (server: self-hosted on VPS, API key required)
 
-**LLM Providers**: OpenAI `>=1.30.0`, Anthropic `>=0.30.0`, OpenRouter via `langchain-openrouter`
-(`ChatOpenRouter`) — all accessed through `LLMProviderBase` / `LLMProviderFactory`. The
-`ChatOpenAI + base_url` workaround for OpenRouter MUST NOT be used; the dedicated LangChain
-integration is required (Principle III). `LLMProviderBase` MUST implement `DeepEvalBaseLLM`
-so every provider is usable directly as a DeepEval metric judge (Principle II).
+**LLM Providers**: OpenAI `>=1.30.0`, Anthropic `>=0.30.0`, OpenRouter — all accessed through
+`LLMProviderBase` / `LLMProviderFactory`. Each concrete provider wraps DeepEval's own
+`DeepEvalBaseLLM` judge-model class for that provider (`GPTModel`, `AnthropicModel`,
+`OpenRouterModel` from `deepeval.models`) per Principle II (DeepEval-First) — the
+`ChatOpenAI`/`ChatAnthropic`/`ChatOpenRouter` LangChain chat models MUST NOT be used for this
+role; that workaround was replaced once the `deepeval_platform/` package rename made native
+`deepeval.models` imports resolvable (see Sync Impact Report). `LLMProviderBase` itself remains
+a project-local ABC — its `generate()` returns `tuple[str, TokenUsage]`, which does not match
+`DeepEvalBaseLLM.generate() -> str`, so it does NOT inherit `DeepEvalBaseLLM` directly. Every
+concrete provider MUST expose `as_deepeval_model() -> DeepEvalBaseLLM` returning the wrapped
+native instance, so it can be passed directly to any `Metric(model=...)` as the judge.
 
 **Backend API**: FastAPI `^0.115.0` + Uvicorn
 
@@ -300,4 +302,4 @@ reference to the violated principle and why no simpler path exists.
 
 **Runtime guidance**: See `CLAUDE.md` for agent-specific runtime instructions.
 
-**Version**: 1.1.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09
+**Version**: 1.2.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09

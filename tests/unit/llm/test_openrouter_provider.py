@@ -50,10 +50,10 @@ class TestOpenRouterProviderConfig:
 class TestOpenRouterProviderNativeModel:
     def test_wraps_deepeval_openrouter_model_not_gpt_model(self, mock_native, mock_config):
         """Verifies DeepEval's own OpenRouterModel is used (not GPTModel) — FR-009 / Principle II."""
-        with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel") as mock_cls:
-            mock_cls.return_value = MagicMock()
-            OpenRouterProvider()
-            assert mock_cls.called
+        with patch("deepeval_platform.llm.openai_provider.GPTModel") as mock_gpt:
+            provider = OpenRouterProvider()
+            assert provider._native is mock_native
+            assert not mock_gpt.called
 
     def test_native_is_set(self, mock_native, mock_config):
         provider = OpenRouterProvider()

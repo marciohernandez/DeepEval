@@ -205,6 +205,8 @@ LLMProviderBase (ABC própria — expõe as_deepeval_model() para uso direto em 
 - `LLMProviderFactory.create(provider, model)` — instancia o provider correto a partir do `.env`
 - Adicionar novo provider = criar uma subclasse + registrar na Factory, **sem tocar no restante do sistema** (validado no M1 como critério de sucesso SC-006)
 
+> ⚠️ **Limitação conhecida (pós-M2.1, não corrigida — impacto zero hoje):** `_to_token_usage()` reporta `TokenUsage(0, 0)` sempre que o `calculate_cost()` nativo do DeepEval não consegue precificar a chamada. Para o **OpenRouter isso é incondicional** — `OpenRouterProvider` nunca configura `cost_per_input_token`/`cost_per_output_token`, e `ConfigManager` usa `dotenv_values()` (não exporta para `os.environ`), então nem um `.env` com essas chaves seria visto pelo fallback de `Settings` do DeepEval. Para OpenAI/Anthropic é latente — só quebra se o modelo configurado não estiver na tabela de preços estática do DeepEval (hoje `gpt-4o`/`claude-sonnet-4-6` estão, então é invisível na configuração atual). Verificado empiricamente via `GPTModel(model=...).calculate_cost()`. Não corrigido porque **nada no código consome `TokenUsage` ainda** — reavaliar quando um módulo de custo/telemetria (M3+) passar a depender desse valor.
+
 #### Configuração no `.env`
 
 ```bash

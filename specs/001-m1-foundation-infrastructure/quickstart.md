@@ -6,6 +6,11 @@ This guide describes how to verify that all six M1 foundation modules are workin
 in a local development environment. It is a validation guide — not a tutorial or implementation
 reference. Full implementation details are in `tasks.md` and the contracts.
 
+> 🔄 **Correção (pós-M2.1):** os imports abaixo foram atualizados de `deepeval.*` para
+> `deepeval_platform.*` — o pacote-fonte do projeto foi renomeado porque `deepeval/` fazia
+> *shadowing* da biblioteca `deepeval` instalada via PyPI, impedindo `import deepeval` de
+> resolver para a lib real. Ver `.specify/memory/constitution.md` Princípio II (DeepEval-First).
+
 ---
 
 ## Prerequisites
@@ -60,7 +65,7 @@ uv sync
 
 ```bash
 uv run python -c "
-from deepeval.config import ConfigManager, ConfigError
+from deepeval_platform.config import ConfigManager, ConfigError
 
 cfg = ConfigManager.instance()
 
@@ -95,7 +100,7 @@ and expected source file. No re-read of files on second call.
 
 ```bash
 uv run python -c "
-from deepeval.observability import LangfuseClient, TelemetryEvent
+from deepeval_platform.observability import LangfuseClient, TelemetryEvent
 from datetime import datetime, timezone
 
 client = LangfuseClient.instance()
@@ -132,7 +137,7 @@ print('Flush: OK')
 
 ```bash
 uv run python -c "
-from deepeval.vector_store import QdrantVectorStoreProvider
+from deepeval_platform.vector_store import QdrantVectorStoreProvider
 from langchain_core.documents import Document
 
 provider = QdrantVectorStoreProvider.instance()
@@ -168,7 +173,7 @@ print('Cleanup: OK')
 
 ```bash
 uv run python -c "
-from deepeval.llm import LLMProviderFactory, LLMProviderError
+from deepeval_platform.llm import LLMProviderFactory, LLMProviderError
 
 # FR-010: Create all three providers
 for provider_name in ['openai', 'anthropic', 'openrouter']:
@@ -200,7 +205,7 @@ Requires at least one trace to exist in Langfuse (run Scenario 2 first).
 
 ```bash
 uv run python -c "
-from deepeval.repositories import TraceRepository
+from deepeval_platform.repositories import TraceRepository
 
 repo = TraceRepository()
 
@@ -234,8 +239,8 @@ No raw Langfuse response objects appear. Empty session returns `[]`.
 uv run python -c "
 import uuid
 from datetime import datetime, timezone
-from deepeval.repositories import EvaluationRepository
-from deepeval.repositories.evaluation_repository import EvaluationResult
+from deepeval_platform.repositories import EvaluationRepository
+from deepeval_platform.repositories.evaluation_repository import EvaluationResult
 
 repo = EvaluationRepository()
 
@@ -286,9 +291,9 @@ uv run python -c "
 # Read trace → create LLM judge → persist result
 import uuid
 from datetime import datetime, timezone
-from deepeval.repositories import TraceRepository, EvaluationRepository
-from deepeval.repositories.evaluation_repository import EvaluationResult
-from deepeval.llm import LLMProviderFactory
+from deepeval_platform.repositories import TraceRepository, EvaluationRepository
+from deepeval_platform.repositories.evaluation_repository import EvaluationResult
+from deepeval_platform.llm import LLMProviderFactory
 
 # Step 1: Read trace
 trace_repo = TraceRepository()

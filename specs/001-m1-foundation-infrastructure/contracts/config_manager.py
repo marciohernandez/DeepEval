@@ -3,7 +3,7 @@ Public interface contract for ConfigManager.
 
 This file is a CONTRACT SPECIFICATION, not implementation.
 It defines the public API surface that ConfigManager must honour.
-Callers import from deepeval.config — not from this file.
+Callers import from deepeval_platform.config — not from this file.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ class ConfigManagerContract:
     are masked in __repr__ and all log output.
 
     Usage:
-        from deepeval.config import ConfigManager
+        from deepeval_platform.config import ConfigManager
         cfg = ConfigManager.instance()
         value = cfg.get("LANGFUSE_HOST")               # from .env
         value = cfg.get("embedding.model")              # from settings.yaml

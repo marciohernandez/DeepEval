@@ -3,11 +3,15 @@ Public interface contracts for LLMProviderBase and LLMProviderFactory.
 
 This file is a CONTRACT SPECIFICATION, not implementation.
 
-LangChain-first:
-  - OpenAIProvider wraps ChatOpenAI (langchain-openai)
-  - AnthropicProvider wraps ChatAnthropic (langchain-anthropic)
-  - OpenRouterProvider wraps ChatOpenRouter (langchain-openrouter)
-  - Each provider implements DeepEvalBaseLLM for metric judging (FR-010)
+Correction (pós-M2.1, constitution v1.2.0): the original text below described providers as
+LangChain chat-model wrappers implementing DeepEvalBaseLLM directly. Neither is accurate to the
+shipped implementation as of commit `3455bfd`:
+  - OpenAIProvider wraps deepeval.models.GPTModel (NOT ChatOpenAI/langchain-openai)
+  - AnthropicProvider wraps deepeval.models.AnthropicModel (NOT ChatAnthropic/langchain-anthropic)
+  - OpenRouterProvider wraps deepeval.models.OpenRouterModel (NOT ChatOpenRouter/langchain-openrouter)
+  - LLMProviderBase does NOT implement DeepEvalBaseLLM directly (return-type contracts diverge);
+    each provider exposes as_deepeval_model() -> DeepEvalBaseLLM for metric judging instead.
+See constitution.md Principle II (DeepEval-First) and tech_stack.md §2.8 for the current design.
 """
 from __future__ import annotations
 
@@ -15,8 +19,7 @@ from abc import ABC, abstractmethod
 from typing import Literal
 
 # In production code:
-# from deepeval.models import DeepEvalBaseLLM
-# from langchain_core.language_models import BaseChatModel
+# from deepeval.models import DeepEvalBaseLLM, GPTModel, AnthropicModel, OpenRouterModel
 
 SupportedProvider = Literal["openai", "anthropic", "openrouter"]
 
@@ -25,13 +28,16 @@ SUPPORTED_PROVIDERS: tuple[str, ...] = ("openai", "anthropic", "openrouter")
 
 class LLMProviderBaseContract(ABC):
     """
-    Abstract base for all LLM providers. Implements DeepEvalBaseLLM.
+    Abstract base for all LLM providers. Does NOT implement DeepEvalBaseLLM directly
+    (see module docstring) — exposes as_deepeval_model() instead.
 
     Subclasses must:
     1. Source all credentials and config from ConfigManager (FR-011).
-    2. Hold an internal _lc_model (LangChain BaseChatModel) for orchestration use.
-    3. Implement DeepEvalBaseLLM.generate() and DeepEvalBaseLLM.a_generate()
-       by delegating to _lc_model.
+    2. Hold an internal _native (DeepEval's own DeepEvalBaseLLM model instance, e.g.
+       GPTModel/AnthropicModel/OpenRouterModel) for judge-model use.
+    3. Implement generate() and a_generate() by delegating to _native and converting its
+       EvaluationCost return value to this project's TokenUsage.
+    4. Implement as_deepeval_model() returning _native, for direct use in Metric(model=...).
 
     ConfigManager keys by provider:
         openai:      OPENAI_API_KEY, OPENAI_DEFAULT_MODEL
@@ -76,7 +82,7 @@ class LLMProviderFactoryContract:
     Adding a new provider requires only registering a new subclass.
 
     Usage:
-        from deepeval.llm import LLMProviderFactory
+        from deepeval_platform.llm import LLMProviderFactory
         provider = LLMProviderFactory.create("openai")
         provider = LLMProviderFactory.create("anthropic", model="claude-sonnet-4-6")
         provider = LLMProviderFactory.create("openrouter")
