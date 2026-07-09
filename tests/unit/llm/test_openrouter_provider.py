@@ -63,6 +63,18 @@ class TestOpenRouterProviderNativeModel:
         provider = OpenRouterProvider()
         assert provider.as_deepeval_model() is mock_native
 
+    def test_passes_zero_cost_per_token_to_preserve_token_counts(self, mock_config):
+        """OpenRouterModel.calculate_cost() discards real token counts and returns None
+        unless cost_per_input_token/cost_per_output_token are set (no static OpenRouter
+        pricing table exists). Passing 0.0 for both unlocks accurate token tracking even
+        though this project never reads the resulting (fictional) $0 cost value."""
+        with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            OpenRouterProvider()
+            _, kwargs = mock_cls.call_args
+            assert kwargs.get("cost_per_input_token") == 0.0
+            assert kwargs.get("cost_per_output_token") == 0.0
+
 
 class TestOpenRouterProviderGenerate:
     def test_generate_returns_str_and_token_usage(self, mock_native, mock_config):
@@ -76,6 +88,10 @@ class TestOpenRouterProviderGenerate:
         assert usage.output_tokens == 6
 
     def test_generate_fallback_to_zeros_when_cost_is_none(self, mock_config):
+        """Defensive: with cost_per_input_token/cost_per_output_token=0.0 always passed
+        (see TestOpenRouterProviderNativeModel), OpenRouterModel.calculate_cost() should
+        no longer return None in practice — but _to_token_usage() must still degrade
+        gracefully to zeros if the native model ever returns cost=None for another reason."""
         mock_instance = MagicMock()
         mock_instance.generate.return_value = ("Hi", None)
 

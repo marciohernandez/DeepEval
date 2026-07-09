@@ -1,7 +1,7 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.1.0 → 1.2.0
+Version change: 1.1.0 → 1.2.1 (see PATCH note at end of this report)
 Bump type: MINOR (Technology Stack substitution — LLM Providers section rewritten to reflect
   the native-DeepEval-model refactor; this is a stack substitution under the Technology Stack
   section's own governance rule, requiring MINOR minimum)
@@ -43,12 +43,20 @@ Follow-up TODOs:
   - TODO(TASKS_TEMPLATE): Update tasks-template.md note to reflect that TDD is NON-NEGOTIABLE
     for this project; tests are never optional here. (Carried over, still open.)
   - TODO(TOKEN_USAGE): `LLMProviderBase._to_token_usage()` reports `TokenUsage(0, 0)` whenever
-    DeepEval's own `calculate_cost()` can't price a call — unconditionally true today for
-    `OpenRouterProvider` (no `cost_per_input_token`/`cost_per_output_token` configured), and
-    latent for OpenAI/Anthropic on any model absent from DeepEval's static pricing tables.
-    Documented as a known limitation (see `tech_stack.md` §2.8) rather than fixed, since nothing
-    in the codebase consumes `TokenUsage` yet. Revisit when a consumer (cost/usage reporting)
-    is built.
+    DeepEval's own `calculate_cost()` can't price a call — latent for OpenAI/Anthropic on any
+    model absent from DeepEval's static pricing tables (project defaults `gpt-4o` /
+    `claude-sonnet-4-6` are both listed, so dormant today). Still open; revisit if a custom/
+    unlisted model is ever configured.
+
+PATCH (1.2.0 → 1.2.1): `OpenRouterProvider` now passes `cost_per_input_token=0.0,
+cost_per_output_token=0.0` to `OpenRouterModel` — this was the unconditional part of the
+TOKEN_USAGE finding above (OpenRouter has no static per-model pricing table, so
+`calculate_cost()` returned `None` on every call, discarding real token counts). Verified
+empirically: `OpenRouterModel(..., cost_per_input_token=0.0, cost_per_output_token=0.0)
+.calculate_cost(100, 50)` now returns a real `EvaluationCost` carrying the real token counts
+(cost reported as a fictional $0, which this project never surfaces — `TokenUsage` has no cost
+field). The OpenAI/Anthropic latent case above is unaffected (their `calculate_cost()` only
+consults the static pricing table, not constructor cost-per-token params) and remains open.
 -->
 
 # DeepEval Chatbot Evaluator Constitution
@@ -302,4 +310,4 @@ reference to the violated principle and why no simpler path exists.
 
 **Runtime guidance**: See `CLAUDE.md` for agent-specific runtime instructions.
 
-**Version**: 1.2.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09
+**Version**: 1.2.1 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09

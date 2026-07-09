@@ -23,7 +23,18 @@ class OpenRouterProvider(LLMProviderBase):
 
         resolved_model = model or ConfigManager.instance().get("openrouter.default_model")
         self._model_str = resolved_model
-        self._native = OpenRouterModel(model=resolved_model, api_key=api_key)
+        # OpenRouterModel.calculate_cost() returns None (discarding real token counts
+        # along with the cost) unless cost_per_input_token/cost_per_output_token are set —
+        # OpenRouter serves hundreds of models with no single static price, so we pass 0.0
+        # deliberately: this project never reads or reports EvaluationCost's dollar value
+        # (TokenUsage has no cost field), but doing so unlocks accurate input/output token
+        # counts on every call instead of silently losing them.
+        self._native = OpenRouterModel(
+            model=resolved_model,
+            api_key=api_key,
+            cost_per_input_token=0.0,
+            cost_per_output_token=0.0,
+        )
 
     @property
     def provider_name(self) -> str:
