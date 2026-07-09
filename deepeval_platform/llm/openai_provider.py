@@ -1,7 +1,12 @@
-"""OpenAIProvider — wraps langchain_openai.ChatOpenAI (US4)."""
+"""OpenAIProvider — wraps DeepEval's native GPTModel (DeepEvalBaseLLM) (US4).
+
+Uses deepeval.models.GPTModel directly instead of langchain_openai.ChatOpenAI, per
+constitution Principle II (DeepEval-First) — GPTModel is DeepEval's own judge-model
+implementation for OpenAI, built for exactly this role.
+"""
 from __future__ import annotations
 
-from langchain_openai import ChatOpenAI
+from deepeval.models import GPTModel
 
 from deepeval_platform.config.config_manager import ConfigError, ConfigManager
 from deepeval_platform.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
@@ -18,7 +23,7 @@ class OpenAIProvider(LLMProviderBase):
 
         resolved_model = model or ConfigManager.instance().get("openai.default_model")
         self._model_str = resolved_model
-        self._lc_model = ChatOpenAI(api_key=api_key, model=resolved_model)
+        self._native = GPTModel(model=resolved_model, api_key=api_key)
 
     @property
     def provider_name(self) -> str:
@@ -29,9 +34,9 @@ class OpenAIProvider(LLMProviderBase):
         return self._model_str
 
     def generate(self, prompt: str) -> tuple[str, TokenUsage]:
-        response = self._lc_model.invoke(prompt)
-        return response.content, self._extract_usage(response)
+        output, cost = self._native.generate(prompt)
+        return output, self._to_token_usage(cost)
 
     async def a_generate(self, prompt: str) -> tuple[str, TokenUsage]:
-        response = await self._lc_model.ainvoke(prompt)
-        return response.content, self._extract_usage(response)
+        output, cost = await self._native.a_generate(prompt)
+        return output, self._to_token_usage(cost)

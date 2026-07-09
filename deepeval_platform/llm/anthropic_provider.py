@@ -1,7 +1,12 @@
-"""AnthropicProvider — wraps langchain_anthropic.ChatAnthropic (US4)."""
+"""AnthropicProvider — wraps DeepEval's native AnthropicModel (DeepEvalBaseLLM) (US4).
+
+Uses deepeval.models.AnthropicModel directly instead of langchain_anthropic.ChatAnthropic,
+per constitution Principle II (DeepEval-First) — AnthropicModel is DeepEval's own
+judge-model implementation for Anthropic, built for exactly this role.
+"""
 from __future__ import annotations
 
-from langchain_anthropic import ChatAnthropic
+from deepeval.models import AnthropicModel
 
 from deepeval_platform.config.config_manager import ConfigError, ConfigManager
 from deepeval_platform.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
@@ -18,7 +23,7 @@ class AnthropicProvider(LLMProviderBase):
 
         resolved_model = model or ConfigManager.instance().get("anthropic.default_model")
         self._model_str = resolved_model
-        self._lc_model = ChatAnthropic(api_key=api_key, model=resolved_model)
+        self._native = AnthropicModel(model=resolved_model, api_key=api_key)
 
     @property
     def provider_name(self) -> str:
@@ -29,9 +34,9 @@ class AnthropicProvider(LLMProviderBase):
         return self._model_str
 
     def generate(self, prompt: str) -> tuple[str, TokenUsage]:
-        response = self._lc_model.invoke(prompt)
-        return response.content, self._extract_usage(response)
+        output, cost = self._native.generate(prompt)
+        return output, self._to_token_usage(cost)
 
     async def a_generate(self, prompt: str) -> tuple[str, TokenUsage]:
-        response = await self._lc_model.ainvoke(prompt)
-        return response.content, self._extract_usage(response)
+        output, cost = await self._native.a_generate(prompt)
+        return output, self._to_token_usage(cost)

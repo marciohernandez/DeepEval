@@ -1,11 +1,13 @@
 """LLMProviderBase ABC and shared types for US4 — Provider-Agnostic LLM Instantiation.
 
-T036a findings (deepeval 4.0.7):
-- DeepEvalBaseLLM.generate() returns str with no native TokenUsage type.
-- The installed 'deepeval' package is shadowed by the local 'deepeval/' directory,
-  making formal inheritance from DeepEvalBaseLLM impossible without path manipulation.
-- LLMProviderBase independently implements the same interface contract.
-  TokenUsage is defined here as a project-local dataclass.
+Post-M2.1 note: concrete providers wrap DeepEval's own DeepEvalBaseLLM model classes
+(GPTModel, AnthropicModel, OpenRouterModel from `deepeval.models`) instead of LangChain
+chat models, per constitution Principle II (DeepEval-First) — these classes already exist
+natively for the judge-model role. This ABC's own contract (generate()->tuple[str,
+TokenUsage], provider_name/model_name properties) is kept stable so nothing above it needs
+to change; only each provider's internals were swapped. Formerly (T036a, pre-rename) this
+was impossible because the local `deepeval/` package shadowed the installed library — fixed
+by renaming the project's package to `deepeval_platform/`.
 """
 from __future__ import annotations
 
@@ -41,11 +43,17 @@ class LLMProviderBase(ABC):
     def get_model_name(self) -> str:
         return self.model_name
 
-    def _extract_usage(self, response) -> TokenUsage:
-        usage = response.usage_metadata
-        if usage is None:
+    def as_deepeval_model(self):
+        """Return the underlying DeepEvalBaseLLM instance for direct use as a metric judge
+        (e.g. `AnswerRelevancyMetric(model=provider.as_deepeval_model())`)."""
+        return self._native
+
+    @staticmethod
+    def _to_token_usage(cost) -> TokenUsage:
+        """Convert a DeepEval EvaluationCost (or None, when pricing is unknown) to TokenUsage."""
+        if cost is None:
             return TokenUsage(input_tokens=0, output_tokens=0)
         return TokenUsage(
-            input_tokens=usage["input_tokens"],
-            output_tokens=usage["output_tokens"],
+            input_tokens=getattr(cost, "input_tokens", None) or 0,
+            output_tokens=getattr(cost, "output_tokens", None) or 0,
         )
