@@ -57,7 +57,9 @@
 
 **Referência de produto:** [Confident AI](https://confident-ai.com) — usado como inspiração de features e UX, não como SaaS. O sistema roda 100% open source e self-hosted.
 
-**Métricas ativas:** AnswerRelevancy, Faithfulness, ContextualPrecision, ContextualRecall, ContextualRelevancy, Hallucination, ToolCorrectness, TaskCompletion, Bias, Toxicity, Summarization, JsonCorrectness, PromptAlignment, KnowledgeRetention, RoleAdherence, ConversationCompleteness, ConversationRelevancy, GEval, DAGMetric, RagasMetric.
+**Métricas ativas:** AnswerRelevancy, Faithfulness, ContextualPrecision, ContextualRecall, ContextualRelevancy, Hallucination, ToolCorrectness, TaskCompletion, Bias, Toxicity, Summarization, JsonCorrectness, PromptAlignment, KnowledgeRetention, RoleAdherence, ConversationCompleteness, TurnRelevancy, GEval, DAGMetric, RagasMetric.
+
+> 🔄 **Correção (pós-M2.1):** a lista listava `ConversationRelevancy`, que não existe como métrica no DeepEval instalado (`4.0.7`, ver `deepeval/metrics/` no `.venv`). A métrica correta de relevância por turno é `TurnRelevancyMetric`.
 
 > **Nota de escopo (pós-M1):** o M1 validou o round-trip de infraestrutura (trace lido → LLM chamado via `LLMProviderFactory.generate()` → resultado persistido), mas a invocação real das métricas DeepEval acima (`AnswerRelevancyMetric` etc.) ainda não foi conectada — está no escopo do M3 (Motor de Avaliação e Métricas). Ou seja, o motor de métricas em si ainda não roda ponta a ponta.
 
@@ -162,6 +164,8 @@ result = chain.invoke(input, config={"callbacks": [handler]})
 | **Qdrant** (servidor) | self-hosted na VPS | Já disponível na infraestrutura atual |
 
 > 🔄 **Correção pós-M1:** o documento original listava `qdrant-client ^1.18.0` como dependência direta. A regra "LangChain First" (§2.4) levou à descoberta, via MCP, de que `langchain_qdrant.QdrantVectorStore` é a integração nativa recomendada — ela já oferece `add_documents`, `similarity_search` e `.as_retriever()` prontos para uso em LangChain/LangGraph. `qdrant-client` continua presente no projeto, mas como dependência **transitiva** de `langchain-qdrant`, não para uso direto.
+>
+> ⚠️ **Achado (pós-M2.1, pendente de decisão):** o uso do Qdrant aqui é para **armazenar datasets de avaliação e embeddings** (golden-sets, busca semântica de traces) — domínio de avaliação (Principle II, DeepEval-First), não orquestração de bot. A checagem que levou a `langchain_qdrant.QdrantVectorStore` consultou apenas o MCP do LangChain, sob a regra antiga. Não foi avaliado se o próprio DeepEval oferece um caminho nativo equivalente para persistência de datasets/embeddings antes de adotar a dependência do LangChain. Já implementado em `deepeval/vector_store/qdrant_provider.py` (M1) — requer decisão e possível refatoração à parte, fora do escopo desta atualização de documentação.
 
 **Uso no sistema:**
 - Datasets de golden-set para avaliações (conjuntos de perguntas + respostas esperadas)
@@ -182,7 +186,9 @@ O sistema adota uma **arquitetura de providers extensível**: qualquer ponto que
 | **Anthropic** | `langchain-anthropic` (`ChatAnthropic`) | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Alternativa de alta precisão |
 | **OpenRouter** | `langchain-openrouter` (`ChatOpenRouter`) 🔄 | Qualquer modelo do catálogo | Acesso unificado a centenas de modelos via uma API key |
 
-> 🔄 **Correção pós-M1 — OpenRouter:** o documento original dizia que o OpenRouter usaria o mesmo SDK da OpenAI, só trocando a `base_url`. A consulta ao MCP do LangChain (Principle II) encontrou orientação explícita da documentação contra essa abordagem — *"For OpenRouter, prefer the dedicated integration `ChatOpenRouter`"* e *"non-standard response fields from third-party providers are not extracted or preserved [por `ChatOpenAI`]"*. A decisão final foi usar o pacote dedicado `langchain-openrouter` (`ChatOpenRouter`), verificado em `0.2.4` no PyPI, compatível com `langchain-core >= 1.4.7`. **O workaround `ChatOpenAI + base_url` não deve mais ser usado.**
+> 🔄 **Correção pós-M1 — OpenRouter:** o documento original dizia que o OpenRouter usaria o mesmo SDK da OpenAI, só trocando a `base_url`. A consulta ao MCP do LangChain (Principle III, renumerado — era "Principle II" nesta nota antes da v1.1.0 da constituição) encontrou orientação explícita da documentação contra essa abordagem — *"For OpenRouter, prefer the dedicated integration `ChatOpenRouter`"* e *"non-standard response fields from third-party providers are not extracted or preserved [por `ChatOpenAI`]"*. A decisão final foi usar o pacote dedicado `langchain-openrouter` (`ChatOpenRouter`), verificado em `0.2.4` no PyPI, compatível com `langchain-core >= 1.4.7`. **O workaround `ChatOpenAI + base_url` não deve mais ser usado.**
+>
+> ⚠️ **Achado (pós-M2.1, pendente de decisão):** este provider serve como **modelo juiz para métricas DeepEval** (`LLMProviderBase` implementa `DeepEvalBaseLLM`) — ou seja, é domínio de avaliação (Principle II, DeepEval-First), não orquestração de bot. A checagem que resultou em `ChatOpenRouter` consultou apenas o MCP do LangChain; o DeepEval `4.0.7` já embute wrappers nativos `DeepEvalBaseLLM` para esse papel — `deepeval.models.llms.openrouter_model.OpenRouterModel`, além de `openai_model.py` e `anthropic_model.py` equivalentes — que nunca foram avaliados como alternativa. Mesma situação em `deepeval/llm/openai_provider.py` e `anthropic_provider.py` (ambos envolvem `langchain_openai`/`langchain_anthropic`). Não alterado nesta atualização — é uma mudança em código já implementado no M1, requer decisão e possível refatoração à parte.
 
 #### Arquitetura de abstração
 

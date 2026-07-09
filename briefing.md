@@ -59,13 +59,33 @@ Desenvolver um **sistema centralizado de avaliação de qualidade de chatbots** 
 | Backend API (dashboard) | FastAPI (Python) |
 | Configuração | `.env` + YAML por ambiente (`config/`) |
 
-### Regra obrigatória de desenvolvimento — LangChain First
+### Regras obrigatórias de desenvolvimento — DeepEval First (principal) e LangChain First (secundário)
 
-> **Antes de escrever qualquer código**, consultar o MCP do LangChain para verificar se já existe classe, função ou integração nativa que atenda à necessidade.
+> **Atualização (pós-M2.1):** o DeepEval é o **framework principal** deste projeto — o motor
+> de avaliação, métricas, Synthesizer, ConversationSimulator e PromptOptimizer são a razão do
+> sistema existir. O LangChain/LangGraph é **secundário**: a camada de orquestração dos bots
+> *sendo avaliados*, não uma alternativa ao DeepEval. Ver `.specify/memory/constitution.md`
+> v1.1.0 (Princípios II e III) para a redação normativa completa.
+
+**DeepEval First (Princípio II — principal):** antes de escrever qualquer código no domínio de
+avaliação (métricas, estratégias de avaliação, extração/coleta de traces, geração de datasets
+sintéticos, otimização de prompt), verificar se o próprio DeepEval já oferece uma classe,
+função ou abstração nativa que atenda à necessidade.
+- Se existir → usar como está, sem reimplementar.
+- Se não existir → desenvolvimento customizado é permitido (ex.: `TraceExtractor`,
+  `EvaluationStrategy` — abstrações de integração específicas deste projeto que adaptam traces
+  do Flowise/LangChain ao modelo de test case do DeepEval).
+
+**LangChain First (Princípio III — secundário, escopo restrito):** antes de escrever código de
+**orquestração/integração dos bots avaliados**, consultar o MCP do LangChain para verificar se
+já existe classe, função ou integração nativa que atenda à necessidade.
 > - Se existir → **usar como prioridade**, sem adaptar nem substituir por outro framework
 > - Se não existir → aí sim desenvolver do zero
 >
-> Isso vale para: chains, retrievers, callbacks, loaders, splitters, memory, agents, tools, output parsers, e qualquer outro componente.
+> Isso vale para: chains, retrievers, callbacks, loaders, splitters, memory, agents, tools,
+> output parsers, e qualquer outro componente usado para conectar/instrumentar os bots avaliados.
+> **Não se aplica** aos módulos de domínio de avaliação do próprio sistema (`TraceExtractor`,
+> `EvaluationStrategy`, `MetricFactory`, etc.) — esses são regidos pelo DeepEval First acima.
 
 ---
 
@@ -191,7 +211,7 @@ O `TraceExtractor` usa o padrão **Strategy** para lidar com cada estrutura: `Fl
 | `KnowledgeRetentionMetric` | O bot lembrou de informações de turnos anteriores? |
 | `RoleAdherenceMetric` | O bot manteve o papel/persona definido? |
 | `ConversationCompletenessMetric` | A conversa resolveu o objetivo do usuário? |
-| `ConversationRelevancyMetric` | As respostas foram relevantes ao longo da conversa? |
+| `TurnRelevancyMetric` | As respostas foram relevantes ao longo da conversa? |
 
 #### Métricas — Custom
 
