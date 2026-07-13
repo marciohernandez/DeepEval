@@ -1,0 +1,9 @@
+"""RagValidationRule — minimum-field rule for RAG bots (M2.2, US3)."""
+from __future__ import annotations
+
+from deepeval_platform.normalization.validation.rule_base import ValidationRuleBase
+
+
+class RagValidationRule(ValidationRuleBase):
+    def required_fields(self) -> list[str]:
+        return ["input", "output", "context", "expected_output"]
