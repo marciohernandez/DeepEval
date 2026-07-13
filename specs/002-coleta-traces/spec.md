@@ -118,12 +118,13 @@ existing strategies.
 - What happens when an interaction has no bot identifier tag? (Expected: excluded from
   results, not silently assigned to the wrong bot.)
 - What happens when the collector is invoked with `start_date` after `end_date`?
-  (Resolved: `TraceFilter.__init__` raises `ValueError` — an invalid filter object
-  cannot be constructed; the collector never sees the invalid input.)
-- What happens when `StrategyFactory` receives a `None` or empty bot type?
+  (Resolved: constructing a filter with an invalid range is rejected immediately —
+  an invalid filter object cannot be constructed; the collector never sees the invalid
+  input.)
+- What happens when `StrategyFactory` receives a missing or empty bot type?
   (Resolved: treated as unrecognized — same `InvalidBotTypeError` as FR-010, listing
-  all supported `BotType` values. No special-case branch; `BotType(None)` and
-  `BotType("")` raise `ValueError` which the factory wraps uniformly.)
+  all supported `BotType` values. Detection is uniform, with no special-case handling
+  for missing or empty values.)
 - What happens when two bot types share the same metric category but require different
   sensitivity thresholds? (Thresholds are strategy-level configuration, not metric identity.)
 
@@ -150,9 +151,9 @@ existing strategies.
   declared per bot in `bots.yaml`, read via `ConfigManager` — never inferred from
   `bot_id` naming conventions or passed by the caller.
 - **FR-005**: `EvaluationStrategyBase` MUST define a single, stable interface that all
-  concrete strategies implement — at minimum a `get_metrics() -> list[str]` method that
-  returns the ordered list of canonical metric name strings for the given bot type.
-  Metric instantiation is handled downstream by `MetricFactory`.
+  concrete strategies implement — at minimum a method that returns the ordered list of
+  canonical metric name identifiers for the given bot type. Metric instantiation is
+  handled downstream by `MetricFactory`.
 - **FR-006**: `RAGStrategy` MUST return a metric set that covers retrieval quality and
   answer faithfulness for RAG bots.
 - **FR-007**: `AgentStrategy` MUST return a metric set that covers tool selection and
@@ -162,10 +163,10 @@ existing strategies.
 - **FR-009**: `StrategyFactory` MUST accept a `BotType` (or a raw string coercible to
   `BotType`) and return the correct strategy instance for each registered value.
 - **FR-010**: `StrategyFactory` MUST raise `InvalidBotTypeError` for any input that
-  cannot be coerced to a valid `BotType` — including unrecognized strings, `None`, and
-  empty strings. The error message MUST include the received value and the list of all
-  supported `BotType` values. Coercion via `BotType(value)` handles detection uniformly;
-  no special-case branch for `None`/`""` is permitted.
+  cannot be identified as a valid `BotType` — including unrecognized identifiers, missing
+  values, and empty values. The error message MUST include the received value and the
+  list of all supported `BotType` values. Detection MUST be uniform across all
+  unrecognized inputs, with no special-case handling for missing or empty values.
 - **FR-011**: Adding a new evaluation strategy MUST require only one new strategy module
   plus one registration line in `StrategyFactory` — zero modifications to existing
   strategy implementations.
@@ -178,20 +179,19 @@ existing strategies.
 ### Key Entities
 
 - **TraceFilter**: The input value object for trace collection — holds `bot_id`,
-  `start_date`, `end_date`, and optional `status`. `__init__` MUST enforce
-  `start_date < end_date`; violating this invariant raises `ValueError` immediately,
-  making it impossible to construct an invalid filter.
+  `start_date`, `end_date`, and optional `status`. Construction MUST enforce
+  `start_date < end_date`; violating this invariant is rejected immediately, making it
+  impossible to construct an invalid filter.
 - **TraceRecord**: The structured interaction record returned by the collector (defined in
   M1; consumed here without modification).
 - **EvaluationStrategy**: The abstract interface every concrete strategy implements,
-  exposing `get_metrics() -> list[str]` — an ordered list of canonical metric name
-  strings for the given bot type. Metric instantiation is handled downstream by
-  `MetricFactory`.
-- **BotType**: A `class BotType(str, Enum)` with members `RAG`, `AGENT`, and
-  `CONVERSATION`. Values are lowercase strings (`"rag"`, `"agent"`, `"conversation"`)
-  for direct YAML round-trip compatibility. `BotType("unknown")` raises `ValueError`,
-  which `StrategyFactory` catches and re-raises as the descriptive error required by
-  FR-010. Sourced from `config/bots.yaml` via `ConfigManager`.
+  exposing a method that returns an ordered list of canonical metric name identifiers
+  for the given bot type. Metric instantiation is handled downstream by `MetricFactory`.
+- **BotType**: A closed set of recognized bot type identifiers — `RAG`, `AGENT`, and
+  `CONVERSATION` — represented as lowercase string values (`"rag"`, `"agent"`,
+  `"conversation"`) for direct YAML round-trip compatibility. An unrecognized value is
+  rejected at the boundary and reported as the descriptive error required by FR-010.
+  Sourced from `config/bots.yaml` via `ConfigManager`.
 
 ## Success Criteria *(mandatory)*
 
