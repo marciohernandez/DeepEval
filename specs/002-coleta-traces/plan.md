@@ -123,16 +123,20 @@ tests/
 │   ├── collection/                      # NEW
 │   │   ├── __init__.py
 │   │   ├── test_trace_filter.py
+│   │   ├── test_extractor_base.py
 │   │   ├── test_flowise_extractor.py
 │   │   ├── test_langchain_extractor.py
-│   │   └── test_trace_collector.py
+│   │   ├── test_trace_collector.py
+│   │   └── test_extractor_extensibility.py
 │   └── evaluation/                      # NEW
 │       ├── __init__.py
 │       ├── test_bot_type.py
+│       ├── test_strategy_base.py
 │       ├── test_rag_strategy.py
 │       ├── test_agent_strategy.py
 │       ├── test_conversation_strategy.py
-│       └── test_strategy_factory.py
+│       ├── test_strategy_factory.py
+│       └── test_strategy_factory_extensibility.py
 └── integration/
     └── test_trace_collector_integration.py  # NEW
 ```
@@ -227,11 +231,24 @@ No constitution violations. All additions are new subclasses or new modules foll
 **C1 — `test_trace_collector_integration.py`**
 - Requires live Langfuse; runs with `pytest -m integration`
 - Covers all four acceptance scenarios from spec User Story 1 (see quickstart.md)
+- Plus a fifth scenario asserting SC-001: `collect()` completes within 3 seconds for up to 500 interactions
 - Uses real `TraceRepository`; no mocks
 
 ---
 
-### Phase D — Coverage Gate
+### Phase E — Extensibility Proof (US3)
+
+**E1 — `test_strategy_factory_extensibility.py`**
+- Defines a throwaway `EvaluationStrategyBase` subclass; confirms it resolves correctly without touching `RAGStrategy`/`AgentStrategy`/`ConversationStrategy` (FR-011, SC-002)
+
+**E2 — `test_extractor_extensibility.py`**
+- Defines a throwaway `TraceExtractorBase` subclass; confirms `.extract()` output shape matches `FlowiseExtractor`/`LangChainExtractor` (spec User Story 3, Acceptance Scenario 2)
+
+No new production modules in this phase — it validates the extensibility contract already delivered by Phases A and B.
+
+---
+
+### Phase F — Coverage Gate
 
 ```bash
 uv run pytest tests/unit/collection/ tests/unit/evaluation/ \

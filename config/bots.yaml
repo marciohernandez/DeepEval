@@ -1,0 +1,10 @@
+bots:
+  test_rag_bot:
+    bot_type: rag
+    platform: flowise
+  test_agent_bot:
+    bot_type: agent
+    platform: langchain
+  test_conversation_bot:
+    bot_type: conversation
+    platform: flowise

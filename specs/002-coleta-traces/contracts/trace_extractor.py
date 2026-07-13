@@ -6,9 +6,14 @@ The real implementations live in deepeval_platform/collection/.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from deepeval_platform.repositories.models import TraceRecord
-from specs.contracts.trace_filter import InteractionStatus  # noqa: F401 (interface reference)
+
+if TYPE_CHECKING:
+    # Real location per plan.md/data-model.md — not importable here since this
+    # contract file predates the production module it describes.
+    from deepeval_platform.collection.trace_filter import InteractionStatus
 
 
 class TraceExtractorBase(ABC):
