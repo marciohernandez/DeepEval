@@ -2,6 +2,9 @@ bots:
   test_rag_bot:
     bot_type: rag
     platform: flowise
+    metrics:
+      faithfulness:
+        threshold: 0.8
     field_mapping:
       input: input.data.question
       output: output.data.answer

@@ -1,1 +1,3 @@
-{"feature_directory":"specs/003-trace-normalizer"}
+{
+  "feature_directory": "specs/004-metric-factory-eval-strategy"
+}

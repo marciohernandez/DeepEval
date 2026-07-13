@@ -13,3 +13,11 @@ anthropic:
 
 openrouter:
   default_model: openai/gpt-4o
+
+evaluation:
+  metric_timeout_seconds: 30
+  metric_timeout_overrides:
+    faithfulness: 60
+  llm_judge:
+    provider: openai
+    model: gpt-4o
