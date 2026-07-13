@@ -2,7 +2,7 @@
 with real files on disk (no mocking of I/O)."""
 
 import pytest
-from deepeval.config.config_manager import ConfigManager
+from deepeval_platform.config.config_manager import ConfigManager
 
 
 def _setup(tmp_path, env_content: str, yaml_content: str):
@@ -53,8 +53,8 @@ class TestRealFileLoading:
         )
         monkeypatch.chdir(tmp_path)
 
-        from deepeval.config.config_manager import ConfigManager as CM1
-        from deepeval.config import ConfigManager as CM2
+        from deepeval_platform.config.config_manager import ConfigManager as CM1
+        from deepeval_platform.config import ConfigManager as CM2
 
         instance1 = CM1.instance()
         instance2 = CM2.instance()

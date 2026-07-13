@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.documents import Document
 
-from deepeval.vector_store.qdrant_provider import QdrantVectorStoreProvider
+from deepeval_platform.vector_store.qdrant_provider import QdrantVectorStoreProvider
 
 _TEST_COLLECTION = "integration-test-qdrant-us3"
 

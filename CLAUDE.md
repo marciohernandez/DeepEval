@@ -4,7 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Early-stage Python project named `deepeval`, scaffolded with `uv`. Python 3.13 pinned (`.python-version`), minimum runtime `^3.11` per constitution. No dependencies or tests exist yet.
+Python project named `deepeval-platform` (source package: `deepeval_platform/`), scaffolded with
+`uv`. Python 3.13 pinned (`.python-version`), minimum runtime `^3.11` per constitution.
+
+**Naming note**: the source package is `deepeval_platform/`, NOT `deepeval/`. It was renamed on
+2026-07-09 (post-M2.1) because a top-level `deepeval/` directory shadowed the installed `deepeval`
+PyPI library on `sys.path`, making it impossible to import DeepEval's native classes
+(`DeepEvalBaseLLM`, metrics, etc.) from within the project's own code. See
+`.specify/memory/constitution.md` Principle II (DeepEval-First) — this rename is what makes that
+principle practically enforceable.
 
 ## Commands
 
@@ -28,5 +36,5 @@ uv add <package>
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at:
-`specs/001-m1-foundation-infrastructure/plan.md`
+`specs/002-coleta-traces/plan.md`
 <!-- SPECKIT END -->

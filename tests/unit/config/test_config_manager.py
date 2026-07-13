@@ -1,5 +1,5 @@
 import pytest
-from deepeval.config.config_manager import ConfigManager, ConfigError, ConfigEntry
+from deepeval_platform.config.config_manager import ConfigManager, ConfigError, ConfigEntry
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

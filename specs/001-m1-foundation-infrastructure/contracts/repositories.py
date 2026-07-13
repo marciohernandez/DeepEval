@@ -21,7 +21,7 @@ class TraceRepositoryContract:
     Never exposes raw Langfuse API responses — all results are TraceRecord instances (FR-014).
 
     Usage:
-        from deepeval.repositories import TraceRepository
+        from deepeval_platform.repositories import TraceRepository
         repo = TraceRepository()
         traces = repo.get_by_bot(bot_id="my-bot")
         traces = repo.get_by_session(session_id="sess-123")
@@ -77,7 +77,7 @@ class EvaluationRepositoryContract:
     Write failures raise RepositoryError — no silent data loss (FR-017).
 
     Usage:
-        from deepeval.repositories import EvaluationRepository
+        from deepeval_platform.repositories import EvaluationRepository
         repo = EvaluationRepository()
         result_id = repo.save(result)          # returns UUID known before insert
         record = repo.get_by_id(result_id)

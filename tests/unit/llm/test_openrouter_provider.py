@@ -5,32 +5,31 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from deepeval.config.config_manager import ConfigError
-from deepeval.llm.base import LLMProviderError, TokenUsage
-from deepeval.llm.openrouter_provider import OpenRouterProvider
+from deepeval.models.utils import EvaluationCost
+
+from deepeval_platform.config.config_manager import ConfigError
+from deepeval_platform.llm.base import LLMProviderError, TokenUsage
+from deepeval_platform.llm.openrouter_provider import OpenRouterProvider
 
 
 @pytest.fixture
-def mock_lc(mock_config):
-    mock_response = MagicMock()
-    mock_response.content = "OpenRouter response"
-    mock_response.usage_metadata = {"input_tokens": 12, "output_tokens": 6}
-    mock_response.response_metadata = {}
+def mock_native(mock_config):
+    cost = EvaluationCost(0.001, 12, 6)
 
-    mock_lc_instance = MagicMock()
-    mock_lc_instance.invoke.return_value = mock_response
-    mock_lc_instance.ainvoke = AsyncMock(return_value=mock_response)
+    mock_instance = MagicMock()
+    mock_instance.generate.return_value = ("OpenRouter response", cost)
+    mock_instance.a_generate = AsyncMock(return_value=("OpenRouter response", cost))
 
-    with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
-        yield mock_lc_instance
+    with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel", return_value=mock_instance):
+        yield mock_instance
 
 
 class TestOpenRouterProviderConfig:
-    def test_reads_api_key_from_config_manager(self, mock_lc, mock_config):
+    def test_reads_api_key_from_config_manager(self, mock_native, mock_config):
         OpenRouterProvider()
         mock_config.get.assert_any_call("OPENROUTER_API_KEY")
 
-    def test_reads_default_model_from_config_manager_when_no_arg(self, mock_lc, mock_config):
+    def test_reads_default_model_from_config_manager_when_no_arg(self, mock_native, mock_config):
         OpenRouterProvider()
         mock_config.get.assert_any_call("openrouter.default_model")
 
@@ -43,64 +42,67 @@ class TestOpenRouterProviderConfig:
             return original(key)
 
         mock_config.get.side_effect = raise_for_api_key
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter"):
+        with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel"):
             with pytest.raises(LLMProviderError):
                 OpenRouterProvider()
 
 
-class TestOpenRouterProviderLCModel:
-    def test_wraps_chat_openrouter_not_chat_openai(self, mock_lc, mock_config):
-        """Verifies ChatOpenRouter is used (not ChatOpenAI) — FR-009 / plan Gate 5."""
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter") as mock_or:
-            mock_or.return_value = MagicMock()
-            OpenRouterProvider()
-            assert mock_or.called
+class TestOpenRouterProviderNativeModel:
+    def test_wraps_deepeval_openrouter_model_not_gpt_model(self, mock_native, mock_config):
+        """Verifies DeepEval's own OpenRouterModel is used (not GPTModel) — FR-009 / Principle II."""
+        with patch("deepeval_platform.llm.openai_provider.GPTModel") as mock_gpt:
+            provider = OpenRouterProvider()
+            assert provider._native is mock_native
+            assert not mock_gpt.called
 
-    def test_lc_model_is_set(self, mock_lc, mock_config):
+    def test_native_is_set(self, mock_native, mock_config):
         provider = OpenRouterProvider()
-        assert provider._lc_model is mock_lc
+        assert provider._native is mock_native
+
+    def test_as_deepeval_model_returns_native_instance(self, mock_native, mock_config):
+        provider = OpenRouterProvider()
+        assert provider.as_deepeval_model() is mock_native
+
+    def test_passes_zero_cost_per_token_to_preserve_token_counts(self, mock_config):
+        """OpenRouterModel.calculate_cost() discards real token counts and returns None
+        unless cost_per_input_token/cost_per_output_token are set (no static OpenRouter
+        pricing table exists). Passing 0.0 for both unlocks accurate token tracking even
+        though this project never reads the resulting (fictional) $0 cost value."""
+        with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            OpenRouterProvider()
+            _, kwargs = mock_cls.call_args
+            assert kwargs.get("cost_per_input_token") == 0.0
+            assert kwargs.get("cost_per_output_token") == 0.0
 
 
 class TestOpenRouterProviderGenerate:
-    def test_generate_returns_str_and_token_usage(self, mock_lc, mock_config):
+    def test_generate_returns_str_and_token_usage(self, mock_native, mock_config):
         provider = OpenRouterProvider()
         text, usage = provider.generate("Say hello")
 
         assert isinstance(text, str)
         assert isinstance(usage, TokenUsage)
         assert text == "OpenRouter response"
+        assert usage.input_tokens == 12
+        assert usage.output_tokens == 6
 
-    def test_generate_fallback_to_response_metadata_when_usage_metadata_none(self, mock_config):
-        mock_response = MagicMock()
-        mock_response.content = "Hi"
-        mock_response.usage_metadata = None
-        mock_response.response_metadata = {"usage": {"prompt_tokens": 5, "completion_tokens": 3}}
-        mock_lc_instance = MagicMock()
-        mock_lc_instance.invoke.return_value = mock_response
+    def test_generate_fallback_to_zeros_when_cost_is_none(self, mock_config):
+        """Defensive: with cost_per_input_token/cost_per_output_token=0.0 always passed
+        (see TestOpenRouterProviderNativeModel), OpenRouterModel.calculate_cost() should
+        no longer return None in practice — but _to_token_usage() must still degrade
+        gracefully to zeros if the native model ever returns cost=None for another reason."""
+        mock_instance = MagicMock()
+        mock_instance.generate.return_value = ("Hi", None)
 
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
-            provider = OpenRouterProvider()
-            text, usage = provider.generate("prompt")
-
-        assert usage.input_tokens == 5
-        assert usage.output_tokens == 3
-
-    def test_generate_fallback_to_zeros_when_no_usage_info(self, mock_config):
-        mock_response = MagicMock()
-        mock_response.content = "Hi"
-        mock_response.usage_metadata = None
-        mock_response.response_metadata = {}
-        mock_lc_instance = MagicMock()
-        mock_lc_instance.invoke.return_value = mock_response
-
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel", return_value=mock_instance):
             provider = OpenRouterProvider()
             text, usage = provider.generate("prompt")
 
         assert usage.input_tokens == 0
         assert usage.output_tokens == 0
 
-    async def test_a_generate_returns_str_and_token_usage(self, mock_lc, mock_config):
+    async def test_a_generate_returns_str_and_token_usage(self, mock_native, mock_config):
         provider = OpenRouterProvider()
         text, usage = await provider.a_generate("Say hello")
 
@@ -109,10 +111,10 @@ class TestOpenRouterProviderGenerate:
 
     def test_auth_error_propagates_naturally_without_wrapping(self, mock_config):
         auth_exc = Exception("Authentication failed: invalid OpenRouter API key")
-        mock_lc_instance = MagicMock()
-        mock_lc_instance.invoke.side_effect = auth_exc
+        mock_instance = MagicMock()
+        mock_instance.generate.side_effect = auth_exc
 
-        with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=mock_lc_instance):
+        with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel", return_value=mock_instance):
             provider = OpenRouterProvider()
             with pytest.raises(Exception, match="Authentication failed"):
                 provider.generate("test")

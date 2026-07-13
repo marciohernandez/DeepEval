@@ -5,19 +5,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deepeval.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
-from deepeval.llm.factory import LLMProviderFactory
-from deepeval.llm.openai_provider import OpenAIProvider
-from deepeval.llm.anthropic_provider import AnthropicProvider
-from deepeval.llm.openrouter_provider import OpenRouterProvider
+from deepeval_platform.llm.base import LLMProviderBase, LLMProviderError, TokenUsage
+from deepeval_platform.llm.factory import LLMProviderFactory
+from deepeval_platform.llm.openai_provider import OpenAIProvider
+from deepeval_platform.llm.anthropic_provider import AnthropicProvider
+from deepeval_platform.llm.openrouter_provider import OpenRouterProvider
 
 
 @pytest.fixture(autouse=True)
-def patch_all_lc_sdks(mock_config):
-    """Patch all LangChain SDK constructors so no real network calls happen."""
-    with patch("deepeval.llm.openai_provider.ChatOpenAI", return_value=MagicMock()):
-        with patch("deepeval.llm.anthropic_provider.ChatAnthropic", return_value=MagicMock()):
-            with patch("deepeval.llm.openrouter_provider.ChatOpenRouter", return_value=MagicMock()):
+def patch_all_native_models(mock_config):
+    """Patch all DeepEval native model classes so no real network calls happen."""
+    with patch("deepeval_platform.llm.openai_provider.GPTModel", return_value=MagicMock()):
+        with patch("deepeval_platform.llm.anthropic_provider.AnthropicModel", return_value=MagicMock()):
+            with patch("deepeval_platform.llm.openrouter_provider.OpenRouterModel", return_value=MagicMock()):
                 yield
 
 
@@ -51,8 +51,8 @@ class TestLLMProviderFactoryCreate:
 
 class TestLLMProviderFactoryModelOverride:
     def test_model_arg_overrides_config_default_for_openai(self):
-        with patch("deepeval.llm.openai_provider.ChatOpenAI") as mock_chat:
-            mock_chat.return_value = MagicMock()
+        with patch("deepeval_platform.llm.openai_provider.GPTModel") as mock_cls:
+            mock_cls.return_value = MagicMock()
             provider = LLMProviderFactory.create("openai", model="gpt-4-turbo")
             assert provider.model_name == "gpt-4-turbo"
 

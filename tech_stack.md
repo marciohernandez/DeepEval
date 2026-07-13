@@ -2,9 +2,11 @@
 
 **Projeto:** DeepEval Chatbot Evaluator  
 **Data:** 2026-06-19  
-**Versão do documento:** 1.1 (atualizado após M1 — Fundação e Infraestrutura)  
+**Versão do documento:** 1.2 (auditoria de alinhamento com `briefing.md` e `.specify/memory/constitution.md`)  
 
 > **Changelog v1.1:** Documento revisado após a conclusão do M1, com base nos artefatos reais do spec-kit (`plan.md`, `research.md`, `data-model.md`) e no `pyproject.toml` do repositório. Três correções principais: (1) estrutura de pastas do código-fonte adicionada à seção 5 — antes só existia nos artefatos do milestone; (2) OpenRouter passa a usar integração dedicada do LangChain em vez do workaround via `base_url`; (3) Qdrant passa a usar `langchain-qdrant` como dependência direta, com `qdrant-client` como transitiva. Mudanças marcadas com 🔄 ao longo do documento.
+
+> **Changelog v1.2:** Auditoria de consistência entre `briefing.md`, `tech_stack.md` e a constitution. Duas correções internas: (1) §5.1 ainda mostrava a árvore de pastas pré-M2.1 (`base.py` "implementa DeepEvalBaseLLM", providers "wraps ChatOpenAI/ChatAnthropic/ChatOpenRouter") mesmo depois de §2.8 já documentar a correção — agora ambas as seções concordam; (2) §6 tinha uma entrada de `TokenUsage` desatualizada, já resolvida em detalhe em §2.8. Além disso, a constitution (`.specify/memory/constitution.md`) foi emendada para v1.3.0 para refletir as substituições de Qdrant (`langchain-qdrant` como dependência direta) e Langfuse SDK (`>=4.13.0` + breaking change do `trace()`) que este documento já registrava como validadas no M1 mas que nunca haviam sido propagadas de volta à seção "Technology Stack" (binding) da constitution.
 
 ---
 
@@ -57,7 +59,9 @@
 
 **Referência de produto:** [Confident AI](https://confident-ai.com) — usado como inspiração de features e UX, não como SaaS. O sistema roda 100% open source e self-hosted.
 
-**Métricas ativas:** AnswerRelevancy, Faithfulness, ContextualPrecision, ContextualRecall, ContextualRelevancy, Hallucination, ToolCorrectness, TaskCompletion, Bias, Toxicity, Summarization, JsonCorrectness, PromptAlignment, KnowledgeRetention, RoleAdherence, ConversationCompleteness, ConversationRelevancy, GEval, DAGMetric, RagasMetric.
+**Métricas ativas:** AnswerRelevancy, Faithfulness, ContextualPrecision, ContextualRecall, ContextualRelevancy, Hallucination, ToolCorrectness, TaskCompletion, Bias, Toxicity, Summarization, JsonCorrectness, PromptAlignment, KnowledgeRetention, RoleAdherence, ConversationCompleteness, TurnRelevancy, GEval, DAGMetric, RagasMetric.
+
+> 🔄 **Correção (pós-M2.1):** a lista listava `ConversationRelevancy`, que não existe como métrica no DeepEval instalado (`4.0.7`, ver `deepeval/metrics/` no `.venv`). A métrica correta de relevância por turno é `TurnRelevancyMetric`.
 
 > **Nota de escopo (pós-M1):** o M1 validou o round-trip de infraestrutura (trace lido → LLM chamado via `LLMProviderFactory.generate()` → resultado persistido), mas a invocação real das métricas DeepEval acima (`AnswerRelevancyMetric` etc.) ainda não foi conectada — está no escopo do M3 (Motor de Avaliação e Métricas). Ou seja, o motor de métricas em si ainda não roda ponta a ponta.
 
@@ -162,6 +166,8 @@ result = chain.invoke(input, config={"callbacks": [handler]})
 | **Qdrant** (servidor) | self-hosted na VPS | Já disponível na infraestrutura atual |
 
 > 🔄 **Correção pós-M1:** o documento original listava `qdrant-client ^1.18.0` como dependência direta. A regra "LangChain First" (§2.4) levou à descoberta, via MCP, de que `langchain_qdrant.QdrantVectorStore` é a integração nativa recomendada — ela já oferece `add_documents`, `similarity_search` e `.as_retriever()` prontos para uso em LangChain/LangGraph. `qdrant-client` continua presente no projeto, mas como dependência **transitiva** de `langchain-qdrant`, não para uso direto.
+>
+> ✅ **Achado reavaliado (pós-M2.1):** o uso do Qdrant aqui é para armazenar datasets de avaliação e embeddings — à primeira vista pareceria domínio de avaliação (Principle II, DeepEval-First) mal-checado sob a regra antiga. Investigação mais a fundo mostrou que **o DeepEval não tem nenhuma integração nativa de vector store** (nenhum módulo de persistência de embeddings/busca semântica self-hosted em `deepeval/dataset/` ou `deepeval/integrations/`) — só gerencia datasets via `EvaluationDataset`/`Golden`, sem alternativa a Qdrant. Como não há caminho nativo do DeepEval para substituir, a escolha de `langchain_qdrant.QdrantVectorStore` (em vez de `qdrant-client` cru) permanece uma decisão de infraestrutura legítima, não um category error — **mantida sem alteração**.
 
 **Uso no sistema:**
 - Datasets de golden-set para avaliações (conjuntos de perguntas + respostas esperadas)
@@ -178,26 +184,30 @@ O sistema adota uma **arquitetura de providers extensível**: qualquer ponto que
 
 | Provider | SDK / Integração | Modelos exemplo | Papel no sistema |
 |---------|-----|----------------|-----------------|
-| **OpenAI** | `langchain-openai` (`ChatOpenAI`) | `gpt-4o`, `gpt-4o-mini` | Modelo juiz padrão para métricas DeepEval |
-| **Anthropic** | `langchain-anthropic` (`ChatAnthropic`) | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Alternativa de alta precisão |
-| **OpenRouter** | `langchain-openrouter` (`ChatOpenRouter`) 🔄 | Qualquer modelo do catálogo | Acesso unificado a centenas de modelos via uma API key |
+| **OpenAI** | `deepeval.models.GPTModel` ✅ (era `langchain-openai`/`ChatOpenAI`) | `gpt-4o`, `gpt-4o-mini` | Modelo juiz padrão para métricas DeepEval |
+| **Anthropic** | `deepeval.models.AnthropicModel` ✅ (era `langchain-anthropic`/`ChatAnthropic`) | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Alternativa de alta precisão |
+| **OpenRouter** | `deepeval.models.OpenRouterModel` ✅ (era `langchain-openrouter`/`ChatOpenRouter`) | Qualquer modelo do catálogo | Acesso unificado a centenas de modelos via uma API key |
 
-> 🔄 **Correção pós-M1 — OpenRouter:** o documento original dizia que o OpenRouter usaria o mesmo SDK da OpenAI, só trocando a `base_url`. A consulta ao MCP do LangChain (Principle II) encontrou orientação explícita da documentação contra essa abordagem — *"For OpenRouter, prefer the dedicated integration `ChatOpenRouter`"* e *"non-standard response fields from third-party providers are not extracted or preserved [por `ChatOpenAI`]"*. A decisão final foi usar o pacote dedicado `langchain-openrouter` (`ChatOpenRouter`), verificado em `0.2.4` no PyPI, compatível com `langchain-core >= 1.4.7`. **O workaround `ChatOpenAI + base_url` não deve mais ser usado.**
+> ✅ **Corrigido (pós-M2.1):** os três providers eram wrappers de chat models do LangChain (`ChatOpenAI`/`ChatAnthropic`/`ChatOpenRouter`), escolhidos sob a antiga regra "LangChain First" sem checar se o DeepEval já resolvia nativamente. Esse papel — **modelo juiz para métricas DeepEval** — é domínio de avaliação (Principle II, DeepEval-First), não orquestração de bot. O DeepEval `4.0.7` já embute wrappers nativos `DeepEvalBaseLLM` para exatamente esse papel: `deepeval.models.GPTModel`, `AnthropicModel`, `OpenRouterModel`. `LLMProviderBase` internamente agora usa essas classes nativas em vez do LangChain — a interface pública (`generate() -> tuple[str, TokenUsage]`, `provider_name`, `model_name`) não mudou, só a implementação. `langchain-anthropic` e `langchain-openrouter` foram removidos de `pyproject.toml` (não são mais usados em lugar nenhum); `anthropic` e `openai` (SDKs reais, usados diretamente pelas classes nativas do DeepEval) foram adicionados como dependências diretas. `langchain-openai` permanece — ainda usado por `OpenAIEmbeddings` no vector store (§2.7).
+>
+> Isso só foi possível depois do rename `deepeval/` → `deepeval_platform/` (ver §5.1) — antes, o shadowing de pacote impedia `from deepeval.models import ...` de resolver para a biblioteca real.
 
 #### Arquitetura de abstração
 
 ```
-LLMProviderBase (DeepEvalBaseLLM)
-    ├── OpenAIProvider       (wraps ChatOpenAI)
-    ├── AnthropicProvider    (wraps ChatAnthropic)
-    ├── OpenRouterProvider   (wraps ChatOpenRouter)  🔄
+LLMProviderBase (ABC própria — expõe as_deepeval_model() para uso direto em Metrics)
+    ├── OpenAIProvider       (usa deepeval.models.GPTModel)         ✅
+    ├── AnthropicProvider    (usa deepeval.models.AnthropicModel)   ✅
+    ├── OpenRouterProvider   (usa deepeval.models.OpenRouterModel)  ✅
     └── [FuturoProvider]  ← adicionar novo provider = criar nova subclasse
 ```
 
-- `LLMProviderBase` implementa `DeepEvalBaseLLM` — integração nativa com todas as métricas DeepEval
-- Cada `LLMProviderBase` mantém internamente um `_lc_model` (o chat model do LangChain) e delega a ele — confirmado no M1 (`data-model.md`)
+- `LLMProviderBase` continua sendo uma ABC própria do projeto (não herda `DeepEvalBaseLLM` diretamente — os contratos de retorno divergem: `generate()` do projeto retorna `tuple[str, TokenUsage]`, o do DeepEval retorna `tuple[str, EvaluationCost | None]`). Cada provider expõe `as_deepeval_model()` para obter a instância nativa `DeepEvalBaseLLM` e passá-la direto a qualquer `Metric(model=...)`.
+- Cada `LLMProviderBase` mantém internamente um `_native` (a instância `DeepEvalBaseLLM` do DeepEval) e converte `EvaluationCost` → `TokenUsage` via `_to_token_usage()`
 - `LLMProviderFactory.create(provider, model)` — instancia o provider correto a partir do `.env`
 - Adicionar novo provider = criar uma subclasse + registrar na Factory, **sem tocar no restante do sistema** (validado no M1 como critério de sucesso SC-006)
+
+> ✅ **Corrigido (pós-M2.1, OpenRouter) / ⚠️ Limitação latente (OpenAI/Anthropic):** `_to_token_usage()` reporta `TokenUsage(0, 0)` sempre que o `calculate_cost()` nativo do DeepEval não consegue precificar a chamada. Isso era **incondicional para o OpenRouter** (`OpenRouterModel` não tem tabela de preços estática — `calculate_cost()` só retorna algo quando `cost_per_input_token`/`cost_per_output_token` estão configurados, e `OpenRouterProvider` nunca os passava). **Corrigido**: `OpenRouterProvider` agora passa `cost_per_input_token=0.0, cost_per_output_token=0.0` ao construir `OpenRouterModel` — verificado empiricamente que isso faz `calculate_cost()` sempre retornar um `EvaluationCost` real com os tokens corretos (custo reportado como $0 fictício, o que não importa: `TokenUsage` não tem campo de custo, nunca foi exposto). Para **OpenAI/Anthropic a limitação continua latente** — `GPTModel`/`AnthropicModel.calculate_cost()` só consultam a tabela de preços estática por nome de modelo (não aceitam override via `cost_per_*_token`), então só quebra se o modelo configurado não estiver nessa tabela (hoje `gpt-4o`/`claude-sonnet-4-6` estão, invisível na configuração atual). Não corrigido para esse caso — impacto restrito a modelos customizados/não listados, e **nada no código consome `TokenUsage` ainda**.
 
 #### Configuração no `.env`
 
@@ -471,10 +481,10 @@ supabase>=2.0.0,<3.0.0
 langchain-qdrant>=1.1.0                  # 🔄 substitui qdrant-client como dependência direta
 # qdrant-client                          # transitivo via langchain-qdrant — não adicionar direto
 
-# LLM Providers (via integrações dedicadas do LangChain)  🔄
-langchain-openai>=1.3.3                  # OpenAI (ChatOpenAI + OpenAIEmbeddings)
-langchain-anthropic>=1.4.8               # Anthropic (ChatAnthropic)
-langchain-openrouter>=0.2                # OpenRouter (ChatOpenRouter) — não usar ChatOpenAI+base_url
+# LLM Providers (via classes nativas DeepEvalBaseLLM — GPTModel/AnthropicModel/OpenRouterModel)  ✅ pós-M2.1
+openai>=1.30.0                           # SDK real, usado por GPTModel e OpenRouterModel (gateway OpenAI-compatible)
+anthropic>=0.30.0                        # SDK real, usado por AnthropicModel
+langchain-openai>=1.3.3                  # mantido apenas por OpenAIEmbeddings (vector store, §2.7) — não mais para o judge model
 
 # Persistência adicional
 psycopg2-binary>=2.9.12                  # 🔄 driver Postgres direto, usado pelo EvaluationRepository/migrations
@@ -499,10 +509,16 @@ pytest-mock>=3.15.1
 
 > 🔄 **Seção reescrita pós-M1.** Antes só existia a estrutura de `config/`; agora inclui a árvore real do código-fonte, confirmada em `specs/001-m1-foundation-infrastructure/plan.md`.
 
-### 5.1 Código-fonte (`deepeval/`)
+### 5.1 Código-fonte (`deepeval_platform/`)
+
+> 🔄 **Correção (pós-M2.1):** o pacote principal foi renomeado de `deepeval/` para
+> `deepeval_platform/`. O nome original colidia com a biblioteca `deepeval` instalada via PyPI —
+> qualquer `import deepeval` feito de dentro do próprio pacote resolvia para si mesmo (shadowing),
+> tornando impossível herdar/usar classes nativas do DeepEval (`DeepEvalBaseLLM`, métricas, etc.)
+> diretamente. Ver `.specify/memory/constitution.md` Princípio II (DeepEval-First).
 
 ```text
-deepeval/                          # Pacote principal
+deepeval_platform/                 # Pacote principal
 ├── __init__.py
 ├── config/
 │   ├── __init__.py
@@ -515,10 +531,11 @@ deepeval/                          # Pacote principal
 │   └── qdrant_provider.py         # QdrantVectorStoreProvider (Singleton) + VectorStoreError
 ├── llm/
 │   ├── __init__.py
-│   ├── base.py                    # LLMProviderBase (ABC, implementa DeepEvalBaseLLM)
-│   ├── openai_provider.py         # OpenAIProvider (wraps ChatOpenAI)
-│   ├── anthropic_provider.py      # AnthropicProvider (wraps ChatAnthropic)
-│   ├── openrouter_provider.py     # OpenRouterProvider (wraps ChatOpenRouter)
+│   ├── base.py                    # LLMProviderBase (ABC própria — NÃO implementa DeepEvalBaseLLM
+│   │                               # diretamente; expõe as_deepeval_model() como escape hatch)
+│   ├── openai_provider.py         # OpenAIProvider (usa deepeval.models.GPTModel)          ✅ pós-M2.1
+│   ├── anthropic_provider.py      # AnthropicProvider (usa deepeval.models.AnthropicModel)  ✅ pós-M2.1
+│   ├── openrouter_provider.py     # OpenRouterProvider (usa deepeval.models.OpenRouterModel) ✅ pós-M2.1
 │   └── factory.py                 # LLMProviderFactory (Factory Method)
 └── repositories/
     ├── __init__.py
@@ -633,7 +650,7 @@ DRY_RUN=false
 |---------|--------|---------|
 | Modelo juiz padrão (gpt-4o-mini vs Ollama local) | Flexível via `.env` — não bloqueia | Custo vs precisão |
 | Flowise — `overrideConfig.systemPrompt` no request | A investigar no M6 (não bloqueia V1) | Define se a otimização de prompt em bots Flowise pode ser automática |
-| `TokenUsage` — tipo nativo do DeepEval ou custom | A confirmar durante a implementação de módulos que o consomem (M1 já deixou como tipo condicional) | Baixo — decisão local, não afeta arquitetura |
+| `TokenUsage` para modelo juiz custom/não listado (OpenAI/Anthropic) | Resolvido para OpenRouter (pós-M2.1, ver §2.8); limitação latente para OpenAI/Anthropic com modelo fora da tabela de preços estática do DeepEval — revisitar se um modelo customizado for configurado | Baixo — nada no código consome `TokenUsage` ainda |
 
 ---
 

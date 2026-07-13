@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from deepeval.observability.langfuse_client import TelemetryEvent
+    from deepeval_platform.observability.langfuse_client import TelemetryEvent
 
 
 class LangfuseClientContract:
@@ -22,7 +22,7 @@ class LangfuseClientContract:
     Delegates all retry/back-off to the Langfuse SDK (FR-007).
 
     Usage:
-        from deepeval.observability import LangfuseClient
+        from deepeval_platform.observability import LangfuseClient
         client = LangfuseClient.instance()
         client.submit(event)
         client.flush()          # called automatically on process exit

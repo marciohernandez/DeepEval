@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from deepeval.repositories import TraceRepository, TraceRecord, TraceRepositoryError
+from deepeval_platform.repositories import TraceRepository, TraceRecord, TraceRepositoryError
 
 
 @pytest.mark.integration
