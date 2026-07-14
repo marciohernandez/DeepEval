@@ -30,4 +30,5 @@ class TestRAGStrategy:
             "contextual_precision",
             "contextual_recall",
             "contextual_relevancy",
+            "hallucination",
         ]
