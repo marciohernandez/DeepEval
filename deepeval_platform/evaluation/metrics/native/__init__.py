@@ -7,5 +7,7 @@ from deepeval_platform.evaluation.metrics.native import (
     contextual_recall_metric,  # noqa: F401
     contextual_relevancy_metric,  # noqa: F401
     faithfulness_metric,  # noqa: F401
+    hallucination_metric,  # noqa: F401
+    task_completion_metric,  # noqa: F401
     tool_correctness_metric,  # noqa: F401
 )
