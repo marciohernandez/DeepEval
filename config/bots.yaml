@@ -2,10 +2,15 @@ bots:
   test_rag_bot:
     bot_type: rag
     platform: flowise
+    geval_criteria: "Response must stay formal and never promise a delivery date"
     metrics:
       faithfulness:
         threshold: 0.8
       summarization:
+        enabled: true
+      ragas_answer_correctness:
+        enabled: true
+      ragas_context_recall:
         enabled: true
     field_mapping:
       input: input.data.question

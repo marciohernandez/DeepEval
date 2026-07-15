@@ -20,6 +20,13 @@ class DummySchema(BaseModel):
     order_id: str
 
 
+def build_dummy_dag() -> str:
+    """Real importable zero-argument dummy callable used to exercise dag_builder's invoke-not-use-as-is
+    resolution path (research.md §R2)."""
+
+    return "dag-instance-sentinel"
+
+
 def _stub_config(values: dict[str, str]) -> MagicMock:
     config = MagicMock()
     config.get_optional.side_effect = lambda key, default="": values.get(key, default)
@@ -90,6 +97,79 @@ class TestResolveMetricNames:
         result = resolver.resolve_metric_names("test_bot", [])
         assert "conversational_g_eval" not in result
 
+    def test_g_eval_appended_only_when_geval_criteria_set(self, resolver_with):
+        resolver = resolver_with(
+            {"bots.test_bot.geval_criteria": "Stays formal"}
+        )
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert result == ["g_eval"]
+
+    def test_g_eval_omitted_when_geval_criteria_absent(self, resolver_with):
+        resolver = resolver_with({})
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert "g_eval" not in result
+
+    def test_dag_appended_only_when_dag_builder_set(self, resolver_with):
+        resolver = resolver_with(
+            {"bots.test_bot.dag_builder": f"{__name__}.build_dummy_dag"}
+        )
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert result == ["dag"]
+
+    def test_dag_omitted_when_dag_builder_absent(self, resolver_with):
+        resolver = resolver_with({})
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert "dag" not in result
+
+    @pytest.mark.parametrize("truthy_value", ["true", "TRUE", "True", "1", "yes", "YES"])
+    def test_ragas_answer_correctness_appended_when_enabled_truthy(
+        self, resolver_with, truthy_value
+    ):
+        resolver = resolver_with(
+            {"bots.test_bot.metrics.ragas_answer_correctness.enabled": truthy_value}
+        )
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert result == ["ragas_answer_correctness"]
+
+    def test_ragas_answer_correctness_omitted_when_false_or_absent(self, resolver_with):
+        resolver = resolver_with(
+            {"bots.test_bot.metrics.ragas_answer_correctness.enabled": "false"}
+        )
+        assert "ragas_answer_correctness" not in resolver.resolve_metric_names("test_bot", [])
+        resolver = resolver_with({})
+        assert "ragas_answer_correctness" not in resolver.resolve_metric_names("test_bot", [])
+
+    @pytest.mark.parametrize("truthy_value", ["true", "TRUE", "True", "1", "yes", "YES"])
+    def test_ragas_context_recall_appended_when_enabled_truthy(
+        self, resolver_with, truthy_value
+    ):
+        resolver = resolver_with(
+            {"bots.test_bot.metrics.ragas_context_recall.enabled": truthy_value}
+        )
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert result == ["ragas_context_recall"]
+
+    def test_ragas_context_recall_omitted_when_false_or_absent(self, resolver_with):
+        resolver = resolver_with(
+            {"bots.test_bot.metrics.ragas_context_recall.enabled": "false"}
+        )
+        assert "ragas_context_recall" not in resolver.resolve_metric_names("test_bot", [])
+        resolver = resolver_with({})
+        assert "ragas_context_recall" not in resolver.resolve_metric_names("test_bot", [])
+
+    def test_ragas_metrics_independent_opt_in(self, resolver_with):
+        resolver = resolver_with(
+            {"bots.test_bot.metrics.ragas_answer_correctness.enabled": "true"}
+        )
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert result == ["ragas_answer_correctness"]
+
+        resolver = resolver_with(
+            {"bots.test_bot.metrics.ragas_context_recall.enabled": "true"}
+        )
+        result = resolver.resolve_metric_names("test_bot", [])
+        assert result == ["ragas_context_recall"]
+
     def test_fixed_append_order_and_strategy_metrics_untouched(self, resolver_with):
         resolver = resolver_with(
             {
@@ -97,6 +177,10 @@ class TestResolveMetricNames:
                 "bots.test_bot.json_schema": "some.module.Schema",
                 "bots.test_bot.prompt_instructions.0": "Be concise",
                 "bots.test_bot.conversational_geval_criteria": "Stays on-topic",
+                "bots.test_bot.geval_criteria": "Stays formal",
+                "bots.test_bot.dag_builder": f"{__name__}.build_dummy_dag",
+                "bots.test_bot.metrics.ragas_answer_correctness.enabled": "true",
+                "bots.test_bot.metrics.ragas_context_recall.enabled": "true",
             }
         )
         result = resolver.resolve_metric_names(
@@ -109,6 +193,10 @@ class TestResolveMetricNames:
             "json_correctness",
             "prompt_alignment",
             "conversational_g_eval",
+            "g_eval",
+            "dag",
+            "ragas_answer_correctness",
+            "ragas_context_recall",
         ]
 
 
@@ -158,6 +246,38 @@ class TestResolveOptions:
         )
         result = resolver.resolve_options("test_bot", ["conversational_g_eval"])
         assert result == {"conversational_g_eval": {"criteria": "Stays on-topic"}}
+
+    def test_g_eval_resolves_criteria(self, resolver_with):
+        resolver = resolver_with({"bots.test_bot.geval_criteria": "Stays formal"})
+        result = resolver.resolve_options("test_bot", ["g_eval"])
+        assert result == {"g_eval": {"criteria": "Stays formal"}}
+
+    def test_resolve_options_dag_invokes_resolved_callable_with_zero_args(self, resolver_with):
+        module_path = f"{__name__}.build_dummy_dag"
+        resolver = resolver_with({"bots.test_bot.dag_builder": module_path})
+        result = resolver.resolve_options("test_bot", ["dag"])
+        assert result == {"dag": {"dag": "dag-instance-sentinel"}}
+
+    def test_dag_bad_module_path_propagates_import_error(self, resolver_with):
+        resolver = resolver_with(
+            {"bots.test_bot.dag_builder": "nonexistent.module.path.build_dag"}
+        )
+        with pytest.raises(ImportError):
+            resolver.resolve_options("test_bot", ["dag"])
+
+    def test_dag_bad_attribute_propagates_attribute_error(self, resolver_with):
+        resolver = resolver_with(
+            {"bots.test_bot.dag_builder": f"{__name__}.no_such_builder"}
+        )
+        with pytest.raises(AttributeError):
+            resolver.resolve_options("test_bot", ["dag"])
+
+    def test_resolve_options_ragas_names_return_empty_dict(self, resolver_with):
+        resolver = resolver_with({})
+        result = resolver.resolve_options(
+            "test_bot", ["ragas_answer_correctness", "ragas_context_recall"]
+        )
+        assert result == {"ragas_answer_correctness": {}, "ragas_context_recall": {}}
 
     def test_role_adherence_resolves_chatbot_role_when_present(self, resolver_with):
         resolver = resolver_with(
