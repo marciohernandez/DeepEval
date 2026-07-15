@@ -19,4 +19,6 @@ class RAGStrategy(EvaluationStrategyBase):
             "contextual_recall",
             "contextual_relevancy",
             "hallucination",
+            "bias",
+            "toxicity",
         ]

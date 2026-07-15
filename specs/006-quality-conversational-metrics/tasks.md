@@ -47,7 +47,7 @@ larger than M3.2's empty Foundational phase because M3.3's stories share a real 
 (`ConversationalTestCase` vs. `LLMTestCase`) and a real new extension point (opt-in per-bot metric
 options) that M3.1's base classes did not anticipate.
 
-- [ ] T001 [P] Write `tests/unit/evaluation/metrics/test_conversational_metric_base.py`: a concrete
+- [X] T001 [P] Write `tests/unit/evaluation/metrics/test_conversational_metric_base.py`: a concrete
   test subclass of `ConversationalMetricBase` setting `_native_metric_cls` to a mocked native
   `BaseConversationalMetric`; `measure(context)` builds a `ConversationalTestCase` from
   `context.trace.messages` mapped to `Turn(role=m.role, content=m.content)` objects (data-model.md),
@@ -57,7 +57,7 @@ options) that M3.1's base classes did not anticipate.
   role outside `{"user", "assistant"}`) raises a pydantic `ValidationError` when the test case is
   built, and that exception propagates out of `measure()` uncaught (isolation stays the
   orchestrator's job, research.md §R2) — no bespoke role-validation code exercised or expected
-- [ ] T002 Implement `deepeval_platform/evaluation/metrics/conversational_metric_base.py`:
+- [X] T002 Implement `deepeval_platform/evaluation/metrics/conversational_metric_base.py`:
   `ConversationalMetricBase` ABC (sibling to `MetricBase`, NOT a subclass — research.md §R8) with
   `_native_metric_cls: ClassVar[type[BaseConversationalMetric]]`,
   `__init__(threshold, deepeval_model)` constructing `self._native`, `threshold`/`passed`
@@ -66,29 +66,29 @@ options) that M3.1's base classes did not anticipate.
   chatbot_role=chatbot_role)`, and `async def measure(context)` — makes T001 pass (depends on
   `deepeval_platform.evaluation.evaluation_context.EvaluationContext` and
   `deepeval_platform.evaluation.evaluation_result.MetricResult`, both unchanged since M3.1)
-- [ ] T003 [P] Update `tests/unit/evaluation/metrics/test_metric_factory.py`: add
+- [X] T003 [P] Update `tests/unit/evaluation/metrics/test_metric_factory.py`: add
   `test_create_forwards_generic_options_to_wrapper` (a dummy `MetricBase` subclass whose `__init__`
   accepts an extra keyword-only param; `MetricFactory.create(name, threshold=..., deepeval_model=...,
   extra_kwarg="value")` passes `extra_kwarg` straight through) and
   `test_create_with_no_extra_options_matches_existing_signature` (every existing M3.1/M3.2-style
   call — `threshold` and `deepeval_model` only — still succeeds unchanged, FR-016)
-- [ ] T004 Implement `deepeval_platform/evaluation/metrics/metric_factory.py`: change
+- [X] T004 Implement `deepeval_platform/evaluation/metrics/metric_factory.py`: change
   `create()`'s signature to
   `create(cls, name: str, *, threshold: float, deepeval_model: DeepEvalBaseLLM, **options: object) ->
   MetricBase`, forwarding `**options` into `cls._registry[name](threshold=threshold,
   deepeval_model=deepeval_model, **options)` with zero branching on `name` (FR-016, research.md
   §R7) — makes T003 pass; `register()` and `_registry` unchanged (SC-006)
-- [ ] T005 [P] Update `tests/unit/config/test_config_manager.py`: add
+- [X] T005 [P] Update `tests/unit/config/test_config_manager.py`: add
   `test_yaml_list_value_flattened_into_indexed_keys` (a YAML list like `prompt_instructions: ["Be
   concise", "Use bullet points"]` under a nested key produces two flat entries,
   `<key>.0 == "Be concise"` and `<key>.1 == "Use bullet points"`, retrievable via
   `cfg.get("<key>.0")`) and `test_yaml_scalar_and_dict_values_unaffected_by_list_branch` (existing
   scalar/nested-dict keys still flatten exactly as before — regression guard, research.md §R4)
-- [ ] T006 Implement `deepeval_platform/config/config_manager.py`
+- [X] T006 Implement `deepeval_platform/config/config_manager.py`
   (`_flatten_yaml`): add a `list` branch — when `v` is a `list`, recurse into each element under
   `f"{flat_key}.{i}"` (reusing the same `dict`/scalar recursion, no new public method); the existing
   `dict` and scalar/`else` branches are untouched — makes T005 pass
-- [ ] T007 [P] Write `tests/unit/evaluation/test_bot_metric_config_resolver.py`:
+- [X] T007 [P] Write `tests/unit/evaluation/test_bot_metric_config_resolver.py`:
   `resolve_metric_names(bot_id, strategy_metrics)` returns `strategy_metrics` unchanged when the
   bot declares none of the four opt-in keys (FR-011); appends `"summarization"` when
   `bots.<bot>.metrics.summarization.enabled` reads as one of `{"true", "1", "yes"}`
@@ -110,14 +110,14 @@ options) that M3.1's base classes did not anticipate.
   `deepeval_platform/evaluation/bot_metric_config_resolver.py`'s source contains no
   `from deepeval_platform.evaluation.metrics` import (FR-015 — no metric instantiation/evaluation
   logic)
-- [ ] T008 Implement `deepeval_platform/evaluation/bot_metric_config_resolver.py`:
+- [X] T008 Implement `deepeval_platform/evaluation/bot_metric_config_resolver.py`:
   `BotMetricConfigResolver` reading exclusively through `ConfigManager` (constructor accepts an
   optional injected `ConfigManager`, defaulting to `ConfigManager.instance()`, mirroring
   `EvaluationOrchestrator`'s pattern) with `resolve_metric_names(bot_id, strategy_metrics) ->
   list[str]` and `resolve_options(bot_id, metric_names) -> dict[str, dict[str, object]]` exactly
   per data-model.md's two tables — makes T007 pass (depends on T006 for the indexed
   `prompt_instructions` reads)
-- [ ] T009 [P] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
+- [X] T009 [P] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
   `test_resolved_options_forwarded_to_metric_factory` (a fake registered wrapper whose `__init__`
   records any extra kwarg it receives; a `BotMetricConfigResolver` stub whose `resolve_options(bot_id,
   [name])` — called once per metric name, per data-model.md §"Modified: EvaluationOrchestrator" —
@@ -127,7 +127,7 @@ options) that M3.1's base classes did not anticipate.
   `test_no_configured_options_matches_byte_identical_prior_behavior` (a resolver stub returning `{}`
   for every name — every existing M3.1/M3.2 assertion in this file keeps passing unmodified,
   confirming the integration is purely additive, SC-006)
-- [ ] T010 Implement `deepeval_platform/evaluation/evaluation_orchestrator.py`:
+- [X] T010 Implement `deepeval_platform/evaluation/evaluation_orchestrator.py`:
   `EvaluationOrchestrator.__init__` gains an optional injected `BotMetricConfigResolver` (default
   `BotMetricConfigResolver()`), stored as `self._resolver`. `evaluate()` performs no options
   resolution itself — inside `_measure_one`'s existing `try` block, immediately before
@@ -165,14 +165,14 @@ score and pass/fail status.
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T011 [P] [US1] Write
+- [X] T011 [P] [US1] Write
   `tests/unit/evaluation/metrics/native/test_conversation_completeness_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["conversation_completeness"] is ConversationCompletenessMetricWrapper`)
   and `test_wraps_native_conversation_completeness_metric`
   (`ConversationCompletenessMetricWrapper._native_metric_cls is ConversationCompletenessMetric`
   from `deepeval.metrics`) and `test_is_conversational_metric_base_subclass`
-- [ ] T012 [P] [US1] Write
+- [X] T012 [P] [US1] Write
   `tests/unit/evaluation/metrics/native/test_conversation_relevancy_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["turn_relevancy"] is ConversationRelevancyMetricWrapper` — FR-005, the
@@ -183,18 +183,18 @@ score and pass/fail status.
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement
+- [X] T013 [US1] Implement
   `deepeval_platform/evaluation/metrics/native/conversation_completeness_metric.py`:
   `ConversationCompletenessMetricWrapper(ConversationalMetricBase)` with `_native_metric_cls =
   ConversationCompletenessMetric` (`deepeval.metrics`),
   `@MetricFactory.register("conversation_completeness")` — no `__init__` override needed, no extra
   constructor kwargs (data-model.md) — makes T011 pass (depends on T002, T004)
-- [ ] T014 [US1] Implement
+- [X] T014 [US1] Implement
   `deepeval_platform/evaluation/metrics/native/conversation_relevancy_metric.py`:
   `ConversationRelevancyMetricWrapper(ConversationalMetricBase)` with `_native_metric_cls =
   TurnRelevancyMetric` (`deepeval.metrics`), `@MetricFactory.register("turn_relevancy")` — makes
   T012 pass (depends on T002, T004)
-- [ ] T015 [US1] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
+- [X] T015 [US1] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
   `conversation_completeness_metric,  # noqa: F401` and `conversation_relevancy_metric,  # noqa:
   F401` to the existing alphabetically-ordered import tuple so importing this package triggers both
   wrappers' self-registration (depends on T013, T014)
@@ -223,50 +223,50 @@ strategy's pre-existing metrics.
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T016 [P] [US2] Write `tests/unit/evaluation/metrics/native/test_bias_metric.py`:
+- [X] T016 [P] [US2] Write `tests/unit/evaluation/metrics/native/test_bias_metric.py`:
   `test_registered_under_canonical_name` (`MetricFactory._registry["bias"] is BiasMetricWrapper`)
   and `test_wraps_native_bias_metric` (`BiasMetricWrapper._native_metric_cls is BiasMetric` from
   `deepeval.metrics`) and `test_is_metric_base_subclass` (LLMTestCase-based, not conversational)
-- [ ] T017 [P] [US2] Write `tests/unit/evaluation/metrics/native/test_toxicity_metric.py`:
+- [X] T017 [P] [US2] Write `tests/unit/evaluation/metrics/native/test_toxicity_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["toxicity"] is ToxicityMetricWrapper`) and
   `test_wraps_native_toxicity_metric` (`ToxicityMetricWrapper._native_metric_cls is ToxicityMetric`
   from `deepeval.metrics`)
-- [ ] T018 [P] [US2] Update `tests/unit/evaluation/test_rag_strategy.py`:
+- [X] T018 [P] [US2] Update `tests/unit/evaluation/test_rag_strategy.py`:
   `test_contains_expected_metric_names` now asserts the eight-entry list `["answer_relevancy",
   "faithfulness", "contextual_precision", "contextual_recall", "contextual_relevancy",
   "hallucination", "bias", "toxicity"]` — same assertion, extended by two additive entries (the six
   existing entries keep their content and order, spec.md Edge Cases)
-- [ ] T019 [P] [US2] Update `tests/unit/evaluation/test_agent_strategy.py`:
+- [X] T019 [P] [US2] Update `tests/unit/evaluation/test_agent_strategy.py`:
   `test_contains_expected_metric_names` (add if not already present, mirroring
   `test_rag_strategy.py`'s pattern) asserts the four-entry list `["tool_correctness",
   "task_completion", "bias", "toxicity"]`
-- [ ] T020 [P] [US2] Update `tests/unit/evaluation/test_conversation_strategy.py`:
+- [X] T020 [P] [US2] Update `tests/unit/evaluation/test_conversation_strategy.py`:
   `test_contains_expected_metric_names` now asserts the four-entry list
   `["conversation_completeness", "turn_relevancy", "bias", "toxicity"]` (the two existing entries
   keep their position; `knowledge_retention`/`role_adherence` are added later by US3)
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] Implement `deepeval_platform/evaluation/metrics/native/bias_metric.py`:
+- [X] T021 [US2] Implement `deepeval_platform/evaluation/metrics/native/bias_metric.py`:
   `BiasMetricWrapper(MetricBase)` with `_native_metric_cls = BiasMetric` (`deepeval.metrics`),
   `@MetricFactory.register("bias")` — no `_build_test_case` override needed (operates on
   `input`/`actual_output`, already populated by `MetricBase._build_test_case`) — makes T016 pass
   (depends on T004)
-- [ ] T022 [US2] Implement `deepeval_platform/evaluation/metrics/native/toxicity_metric.py`:
+- [X] T022 [US2] Implement `deepeval_platform/evaluation/metrics/native/toxicity_metric.py`:
   `ToxicityMetricWrapper(MetricBase)` with `_native_metric_cls = ToxicityMetric`
   (`deepeval.metrics`), `@MetricFactory.register("toxicity")` — makes T017 pass (depends on T004)
-- [ ] T023 [US2] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
+- [X] T023 [US2] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
   `bias_metric,  # noqa: F401` and `toxicity_metric,  # noqa: F401` to the existing
   alphabetically-ordered import tuple (depends on T021, T022; touches the same file as T015 —
   sequential, either order)
-- [ ] T024 [US2] Update `deepeval_platform/evaluation/strategies/rag_strategy.py`: append
+- [X] T024 [US2] Update `deepeval_platform/evaluation/strategies/rag_strategy.py`: append
   `"bias"`, `"toxicity"` as the seventh and eighth entries returned by `RAGStrategy.get_metrics()`
   — makes T018 pass (research.md: pure additive change, no other member changes)
-- [ ] T025 [US2] Update `deepeval_platform/evaluation/strategies/agent_strategy.py`: append
+- [X] T025 [US2] Update `deepeval_platform/evaluation/strategies/agent_strategy.py`: append
   `"bias"`, `"toxicity"` as the third and fourth entries returned by `AgentStrategy.get_metrics()`
   — makes T019 pass
-- [ ] T026 [US2] Update `deepeval_platform/evaluation/strategies/conversation_strategy.py`: append
+- [X] T026 [US2] Update `deepeval_platform/evaluation/strategies/conversation_strategy.py`: append
   `"bias"`, `"toxicity"` as the third and fourth entries returned by
   `ConversationStrategy.get_metrics()` — makes T020 pass
 
@@ -294,14 +294,14 @@ entries already produced by User Stories 1 and 2 — without the caller requesti
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T027 [P] [US3] Write
+- [X] T027 [P] [US3] Write
   `tests/unit/evaluation/metrics/native/test_knowledge_retention_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["knowledge_retention"] is KnowledgeRetentionMetricWrapper`) and
   `test_wraps_native_knowledge_retention_metric`
   (`KnowledgeRetentionMetricWrapper._native_metric_cls is KnowledgeRetentionMetric` from
   `deepeval.metrics`)
-- [ ] T028 [P] [US3] Write `tests/unit/evaluation/metrics/native/test_role_adherence_metric.py`:
+- [X] T028 [P] [US3] Write `tests/unit/evaluation/metrics/native/test_role_adherence_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["role_adherence"] is RoleAdherenceMetricWrapper`) and
   `test_wraps_native_role_adherence_metric`
@@ -313,11 +313,11 @@ entries already produced by User Stories 1 and 2 — without the caller requesti
   argument) and `test_missing_chatbot_role_defaults_to_none` (constructed with no `chatbot_role`
   kwarg, the built test case's `chatbot_role is None` — FR-010a, letting the native metric's own
   `MissingTestCaseParamsError` surface uncaught, per research.md §R1)
-- [ ] T029 [P] [US3] Update `tests/unit/evaluation/test_conversation_strategy.py`:
+- [X] T029 [P] [US3] Update `tests/unit/evaluation/test_conversation_strategy.py`:
   `test_contains_expected_metric_names` now asserts the six-entry list
   `["conversation_completeness", "turn_relevancy", "bias", "toxicity", "knowledge_retention",
   "role_adherence"]` (touches the same file as T020 — sequential, applied after it)
-- [ ] T030 [P] [US3] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
+- [X] T030 [P] [US3] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
   `test_role_adherence_missing_chatbot_role_isolated_not_skipped` — a fake registered
   `role_adherence` wrapper whose `measure()` raises the real DeepEval `MissingTestCaseParamsError`
   when constructed with `chatbot_role=None` (mirrors `TestMetricExceptionIsolated`'s pattern);
@@ -328,12 +328,12 @@ entries already produced by User Stories 1 and 2 — without the caller requesti
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Implement
+- [X] T031 [US3] Implement
   `deepeval_platform/evaluation/metrics/native/knowledge_retention_metric.py`:
   `KnowledgeRetentionMetricWrapper(ConversationalMetricBase)` with `_native_metric_cls =
   KnowledgeRetentionMetric` (`deepeval.metrics`), `@MetricFactory.register("knowledge_retention")`
   — no `__init__` override, no extra kwargs — makes T027 pass (depends on T002, T004)
-- [ ] T032 [US3] Implement `deepeval_platform/evaluation/metrics/native/role_adherence_metric.py`:
+- [X] T032 [US3] Implement `deepeval_platform/evaluation/metrics/native/role_adherence_metric.py`:
   `RoleAdherenceMetricWrapper(ConversationalMetricBase)` with `_native_metric_cls =
   RoleAdherenceMetric` (`deepeval.metrics`), an `__init__(self, threshold, deepeval_model,
   chatbot_role: str | None = None)` storing `chatbot_role` and calling
@@ -341,11 +341,11 @@ entries already produced by User Stories 1 and 2 — without the caller requesti
   `_build_test_case` override taking the stored `chatbot_role`) that forwards
   `chatbot_role=self._chatbot_role` into `ConversationalMetricBase._build_test_case`,
   `@MetricFactory.register("role_adherence")` — makes T028 pass (depends on T002, T004)
-- [ ] T033 [US3] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
+- [X] T033 [US3] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
   `knowledge_retention_metric,  # noqa: F401` and `role_adherence_metric,  # noqa: F401` to the
   existing alphabetically-ordered import tuple (depends on T031, T032; touches the same file as
   T023 — sequential)
-- [ ] T034 [US3] Update `deepeval_platform/evaluation/strategies/conversation_strategy.py`: append
+- [X] T034 [US3] Update `deepeval_platform/evaluation/strategies/conversation_strategy.py`: append
   `"knowledge_retention"`, `"role_adherence"` as the fifth and sixth entries returned by
   `ConversationStrategy.get_metrics()` — makes T029 pass (touches the same file as T026 —
   sequential, applied after it)
@@ -375,12 +375,12 @@ keys is entirely unaffected (no attempt, no error).
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T035 [P] [US4] Write `tests/unit/evaluation/metrics/native/test_summarization_metric.py`:
+- [X] T035 [P] [US4] Write `tests/unit/evaluation/metrics/native/test_summarization_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["summarization"] is SummarizationMetricWrapper`) and
   `test_wraps_native_summarization_metric`
   (`SummarizationMetricWrapper._native_metric_cls is SummarizationMetric` from `deepeval.metrics`)
-- [ ] T036 [P] [US4] Write `tests/unit/evaluation/metrics/native/test_json_correctness_metric.py`:
+- [X] T036 [P] [US4] Write `tests/unit/evaluation/metrics/native/test_json_correctness_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["json_correctness"] is JsonCorrectnessMetricWrapper`),
   `test_wraps_native_json_correctness_metric`
@@ -389,7 +389,7 @@ keys is entirely unaffected (no attempt, no error).
   (`JsonCorrectnessMetricWrapper(threshold=0.5, deepeval_model=<mock>,
   expected_schema=<dummy BaseModel subclass>)` constructs its native metric with that exact
   `expected_schema`)
-- [ ] T037 [P] [US4] Write `tests/unit/evaluation/metrics/native/test_prompt_alignment_metric.py`:
+- [X] T037 [P] [US4] Write `tests/unit/evaluation/metrics/native/test_prompt_alignment_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["prompt_alignment"] is PromptAlignmentMetricWrapper`),
   `test_wraps_native_prompt_alignment_metric`
@@ -398,7 +398,7 @@ keys is entirely unaffected (no attempt, no error).
   (`PromptAlignmentMetricWrapper(threshold=0.5, deepeval_model=<mock>,
   prompt_instructions=["Always respond in JSON"])` constructs its native metric with that exact
   list)
-- [ ] T038 [P] [US4] Write
+- [X] T038 [P] [US4] Write
   `tests/unit/evaluation/metrics/native/test_conversational_g_eval_metric.py`:
   `test_registered_under_canonical_name`
   (`MetricFactory._registry["conversational_g_eval"] is ConversationalGEvalMetricWrapper`),
@@ -409,7 +409,7 @@ keys is entirely unaffected (no attempt, no error).
   (`ConversationalGEvalMetricWrapper(threshold=0.5, deepeval_model=<mock>, criteria="Stays
   on-topic")` constructs its native `ConversationalGEval` with `criteria="Stays on-topic"` and a
   fixed literal `name` — data-model.md notes `name` is not bot-configurable this milestone)
-- [ ] T039 [P] [US4] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add two tests.
+- [X] T039 [P] [US4] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add two tests.
   (1) `test_malformed_opt_in_config_isolated_not_blocking` — a `BotMetricConfigResolver` stub whose
   `resolve_options(bot_id, [name])` raises (`ImportError`/`AttributeError`, mirroring a bad dotted
   `json_schema` import path, research.md §R5) only when called for `"json_correctness"` and returns
@@ -429,38 +429,38 @@ keys is entirely unaffected (no attempt, no error).
 
 ### Implementation for User Story 4
 
-- [ ] T040 [US4] Implement `deepeval_platform/evaluation/metrics/native/summarization_metric.py`:
+- [X] T040 [US4] Implement `deepeval_platform/evaluation/metrics/native/summarization_metric.py`:
   `SummarizationMetricWrapper(MetricBase)` with `_native_metric_cls = SummarizationMetric`
   (`deepeval.metrics`), `@MetricFactory.register("summarization")` — no `__init__` override, no
   extra kwargs (research.md §R1: `n`/`assessment_questions` stay at native defaults) — makes T035
   pass (depends on T004)
-- [ ] T041 [US4] Implement
+- [X] T041 [US4] Implement
   `deepeval_platform/evaluation/metrics/native/json_correctness_metric.py`:
   `JsonCorrectnessMetricWrapper(MetricBase)` with `_native_metric_cls = JsonCorrectnessMetric`
   (`deepeval.metrics`), an `__init__(self, threshold, deepeval_model, expected_schema: type)`
   constructing `self._native = JsonCorrectnessMetric(threshold=threshold, model=deepeval_model,
   expected_schema=expected_schema, async_mode=True)`, `@MetricFactory.register("json_correctness")`
   — makes T036 pass (depends on T004)
-- [ ] T042 [US4] Implement
+- [X] T042 [US4] Implement
   `deepeval_platform/evaluation/metrics/native/prompt_alignment_metric.py`:
   `PromptAlignmentMetricWrapper(MetricBase)` with `_native_metric_cls = PromptAlignmentMetric`
   (`deepeval.metrics`), an `__init__(self, threshold, deepeval_model, prompt_instructions:
   list[str])` constructing `self._native = PromptAlignmentMetric(threshold=threshold,
   model=deepeval_model, prompt_instructions=prompt_instructions, async_mode=True)`,
   `@MetricFactory.register("prompt_alignment")` — makes T037 pass (depends on T004)
-- [ ] T043 [US4] Implement
+- [X] T043 [US4] Implement
   `deepeval_platform/evaluation/metrics/native/conversational_g_eval_metric.py`:
   `ConversationalGEvalMetricWrapper(ConversationalMetricBase)` with `_native_metric_cls =
   ConversationalGEval` (`deepeval.metrics`), an `__init__(self, threshold, deepeval_model,
   criteria: str)` constructing `self._native = ConversationalGEval(name="Conversational Quality",
   criteria=criteria, threshold=threshold, model=deepeval_model, async_mode=True)`,
   `@MetricFactory.register("conversational_g_eval")` — makes T038 pass (depends on T002, T004)
-- [ ] T044 [US4] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
+- [X] T044 [US4] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
   `summarization_metric,  # noqa: F401`, `json_correctness_metric,  # noqa: F401`,
   `prompt_alignment_metric,  # noqa: F401`, and `conversational_g_eval_metric,  # noqa: F401` to
   the existing alphabetically-ordered import tuple (depends on T040–T043; touches the same file as
   T033 — sequential)
-- [ ] T045 [US4] Update `config/bots.yaml`: add example opt-in keys demonstrating activation, on
+- [X] T045 [US4] Update `config/bots.yaml`: add example opt-in keys demonstrating activation, on
   bots other than where doing so would defeat another deliberate fixture property — e.g. add
   `metrics.summarization.enabled: true` under `test_rag_bot` (sibling of its existing
   `metrics.faithfulness.threshold`), `prompt_instructions` under `test_agent_bot`, and
@@ -485,7 +485,7 @@ unaffected. All four user stories work independently and together.
 
 **Purpose**: Cross-story edge case coverage and final verification across all four stories.
 
-- [ ] T046 [P] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
+- [X] T046 [P] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
   `test_invalid_message_role_isolates_only_conversational_metrics` — a trace whose `messages`
   includes a `Message(role="system", ...)` entry; requesting a mix of a conversational metric name
   (e.g. `conversation_completeness`, fake-registered to raise the real pydantic `ValidationError`
@@ -494,7 +494,7 @@ unaffected. All four user stories work independently and together.
   `MetricResult` is isolated-failed (`score is None`, `passed is False`, populated `error`) while
   `bias`'s result completes normally in the same `EvaluationResult` — spec.md Edge Cases, exercises
   FR-003's "no filtering/remapping" guarantee end-to-end
-- [ ] T046a Update `tests/unit/evaluation/test_evaluation_orchestrator.py` — touches the same file
+- [X] T046a Update `tests/unit/evaluation/test_evaluation_orchestrator.py` — touches the same file
   as T046, sequential, applied after it: add
   `test_empty_or_single_turn_messages_isolates_only_multi_turn_conversational_metrics` — a trace
   whose `messages` is `[]` (and a variant with exactly one turn); requesting a mix of the five
@@ -508,7 +508,7 @@ unaffected. All four user stories work independently and together.
   `EvaluationResult` — spec.md Edge Cases (empty/single-turn `messages` bullet), exercises the same
   generic isolated-failure path as T046 but for the "no `messages`/single turn" case rather than the
   "invalid role" case
-- [ ] T047 Run the full quickstart.md validation suite — `uv run pytest tests/unit/evaluation -v`
+- [X] T047 Run the full quickstart.md validation suite — `uv run pytest tests/unit/evaluation -v`
   and `uv run pytest --cov=deepeval_platform --cov-report=term-missing --cov-fail-under=80` —
   confirm every spec.md acceptance scenario and edge case in quickstart.md's mapping table passes
   (including all pre-existing M3.1/M3.2 isolation/duplicate/timeout tests, unaffected by this

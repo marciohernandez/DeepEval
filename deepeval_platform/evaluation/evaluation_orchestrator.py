@@ -8,6 +8,7 @@ import inspect
 import logging
 
 from deepeval_platform.config.config_manager import ConfigManager
+from deepeval_platform.evaluation.bot_metric_config_resolver import BotMetricConfigResolver
 from deepeval_platform.evaluation.errors import (
     ConfigResolutionError,
     DuplicateMetricRequestError,
@@ -28,8 +29,13 @@ logger = logging.getLogger(__name__)
 
 
 class EvaluationOrchestrator:
-    def __init__(self, config: ConfigManager | None = None) -> None:
+    def __init__(
+        self,
+        config: ConfigManager | None = None,
+        resolver: BotMetricConfigResolver | None = None,
+    ) -> None:
         self._config = config if config is not None else ConfigManager.instance()
+        self._resolver = resolver if resolver is not None else BotMetricConfigResolver()
 
     async def evaluate(
         self, trace: NormalizedTrace, bot_id: str, metric_names: list[str]
@@ -58,7 +64,7 @@ class EvaluationOrchestrator:
 
         results = await asyncio.gather(
             *(
-                self._measure_one(name, thresholds[name], timeouts[name], judge, context)
+                self._measure_one(bot_id, name, thresholds[name], timeouts[name], judge, context)
                 for name in metric_names
             )
         )
@@ -68,6 +74,7 @@ class EvaluationOrchestrator:
 
     async def _measure_one(
         self,
+        bot_id: str,
         name: str,
         threshold: float,
         timeout: float,
@@ -75,7 +82,10 @@ class EvaluationOrchestrator:
         context: EvaluationContext,
     ) -> MetricResult:
         try:
-            metric = MetricFactory.create(name, threshold=threshold, deepeval_model=judge)
+            options = self._resolver.resolve_options(bot_id, [name])[name]
+            metric = MetricFactory.create(
+                name, threshold=threshold, deepeval_model=judge, **options
+            )
             return await asyncio.wait_for(metric.measure(context), timeout=timeout)
         except asyncio.TimeoutError:
             logger.exception("Metric '%s' exceeded its %ss timeout", name, timeout)

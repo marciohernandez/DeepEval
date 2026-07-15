@@ -26,7 +26,14 @@ class TestConversationStrategy:
 
     def test_contains_expected_metric_names(self):
         metrics = ConversationStrategy().get_metrics()
-        assert metrics == ["conversation_completeness", "turn_relevancy"]
+        assert metrics == [
+            "conversation_completeness",
+            "turn_relevancy",
+            "bias",
+            "toxicity",
+            "knowledge_retention",
+            "role_adherence",
+        ]
 
     def test_distinct_from_rag_strategy(self):
         assert set(ConversationStrategy().get_metrics()) != set(RAGStrategy().get_metrics())

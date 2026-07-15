@@ -24,8 +24,8 @@ class MetricFactory:
 
     @classmethod
     def create(
-        cls, name: str, *, threshold: float, deepeval_model: DeepEvalBaseLLM
+        cls, name: str, *, threshold: float, deepeval_model: DeepEvalBaseLLM, **options: object
     ) -> MetricBase:
         if name not in cls._registry:
             raise UnknownMetricError(name, supported=sorted(cls._registry))
-        return cls._registry[name](threshold=threshold, deepeval_model=deepeval_model)
+        return cls._registry[name](threshold=threshold, deepeval_model=deepeval_model, **options)

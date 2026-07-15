@@ -31,4 +31,6 @@ class TestRAGStrategy:
             "contextual_recall",
             "contextual_relevancy",
             "hallucination",
+            "bias",
+            "toxicity",
         ]

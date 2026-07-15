@@ -11,4 +11,11 @@ class ConversationStrategy(EvaluationStrategyBase):
     """
 
     def get_metrics(self) -> list[str]:
-        return ["conversation_completeness", "turn_relevancy"]
+        return [
+            "conversation_completeness",
+            "turn_relevancy",
+            "bias",
+            "toxicity",
+            "knowledge_retention",
+            "role_adherence",
+        ]

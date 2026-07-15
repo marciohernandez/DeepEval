@@ -81,6 +81,10 @@ class ConfigManager:
             flat_key = f"{prefix}.{k}" if prefix else str(k)
             if isinstance(v, dict):
                 self._flatten_yaml(v, flat_key, source_file)
+            elif isinstance(v, list):
+                self._flatten_yaml(
+                    {str(i): item for i, item in enumerate(v)}, flat_key, source_file
+                )
             else:
                 self._store[flat_key] = ConfigEntry(
                     key=flat_key,
