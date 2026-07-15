@@ -147,26 +147,54 @@ subclass — polymorphism from `EvaluationOrchestrator`'s point of view is prese
 `threshold`/`passed`/`async measure(context) -> MetricResult` surface); only the *internal*
 delegation target changes, which is exactly what subclassing an ABC is for.
 
-## R5. Ragas package absence / misconfiguration is an ordinary caught exception — no new guard needed
+## R5. Ragas package absence is isolated via a guarded import inside `ragas_metric.py` — module-load time must never raise
 
 Edge case (spec): "a Ragas metric when the `ragas` package is not installed... is treated as an
-isolated failure of that metric only." Since `ragas` is imported inside `ragas_metric.py`
-(top-level `from ragas.metrics import AnswerCorrectness, ContextRecall` / `from ragas.dataset_schema
-import SingleTurnSample`), a missing install would raise `ImportError` when
-`deepeval_platform.evaluation.metrics.native.__init__` imports the module at package-load time —
-which would break *every* metric, not isolate the failure to Ragas alone, violating FR-010/SC-003.
+isolated failure of that metric only." A naive top-level `from ragas.metrics import
+AnswerCorrectness, ContextRecall` / `from ragas.dataset_schema import SingleTurnSample` inside
+`ragas_metric.py` would raise `ImportError` the moment
+`deepeval_platform.evaluation.metrics.native.__init__` imports that module at package-load
+time — which breaks *every* metric's registration (`g_eval`, `dag`, and every M3.1-M3.3 native
+wrapper), not just the two Ragas names, violating FR-010/SC-003. This is a real gap, not a
+hypothetical: it fires on any environment where `uv sync` hasn't (yet, or successfully) installed
+`ragas` — which the Edge Case explicitly names as the scenario to isolate, not exclude.
 
-**Decision**: `ragas` is declared a normal (non-optional) direct dependency (`ragas>=0.2.0`,
-FR-010) — installed exactly like every other dependency via `uv sync`, not behind an optional-extra
-or lazy-import guard. The "not installed" edge case in the spec describes a deployment/ops failure
-mode (a package that should be present but isn't, e.g. a broken `uv sync`), which is out of this
-feature's control to prevent — `EvaluationOrchestrator._measure_one`'s existing generic
-`except Exception` catch (M3.1) already isolates *any* exception a metric's `measure()` raises,
-including one surfaced indirectly (e.g. a misconfigured Ragas judge/embeddings failing inside
-`measure()` itself, or `MetricFactory.create()` raising during `RagasMetricWrapper.__init__` if
-construction-time config is bad) — consistent with how every other opt-in metric's misconfiguration
-is already isolated since M3.1. No new import-guard or try/except-at-module-load mechanism is
-introduced.
+**Decision**: `ragas` remains a normal (non-optional) direct dependency (`ragas>=0.2.0`, FR-010),
+installed via `uv sync` like every other dependency — but `ragas_metric.py` guards its own
+`ragas.*` imports at the top of the module:
+
+```python
+try:
+    from ragas.dataset_schema import SingleTurnSample
+    from ragas.embeddings import LangchainEmbeddingsWrapper
+    from ragas.metrics import AnswerCorrectness, ContextRecall
+    _RAGAS_IMPORT_ERROR: Exception | None = None
+except ImportError as exc:  # pragma: no cover - exercised via monkeypatched flag in tests
+    _RAGAS_IMPORT_ERROR = exc
+```
+
+`RagasMetricWrapper.__init__` checks `_RAGAS_IMPORT_ERROR` first and, if set, raises immediately
+(`raise ImportError("ragas is not installed; run `uv sync`") from _RAGAS_IMPORT_ERROR`) — before
+touching `AnswerCorrectness`/`ContextRecall`/`SingleTurnSample` at all. Both
+`_AnswerCorrectnessMetricWrapper`/`_ContextRecallMetricWrapper` **class definitions** (and their
+`@MetricFactory.register(...)` decorators) do not reference the guarded names at class-body
+evaluation time, so they still define and register successfully even when `ragas` is absent —
+`deepeval_platform.evaluation.metrics.native.__init__`'s import of `ragas_metric` always succeeds,
+and both canonical names remain present in `MetricFactory._registry`. This matters beyond just
+avoiding the module-load crash: `EvaluationOrchestrator.evaluate()` pre-flight-checks every
+requested metric name against `MetricFactory._registry` *before* `_measure_one`'s per-metric
+try/except runs (`evaluation_orchestrator.py:50`) — if either Ragas name were simply left
+unregistered when `ragas` is missing, a bot that opts into it would hit `UnknownMetricError` for
+the *entire* `evaluate()` call, aborting sibling metrics too, which is the same class of violation
+via a different code path. Keeping both names always-registered, and deferring the failure to
+construction time inside `_measure_one`'s existing try/except (M3.1), is what actually isolates
+the failure to the one opted-in Ragas metric per FR-010/the Edge Case.
+
+Misconfiguration once `ragas` **is** installed (bad credentials, embedding config) is still an
+ordinary exception surfacing from inside `measure()`/`__init__` construction, isolated by
+`EvaluationOrchestrator._measure_one`'s existing generic `except Exception` catch (M3.1) —
+consistent with how every other opt-in metric's misconfiguration is already isolated. No
+orchestrator change is needed for that part; the guard above only closes the module-load-time gap.
 
 ## R6. `bots.<bot>.metrics.ragas_answer_correctness.enabled` / `...ragas_context_recall.enabled` — same truthy pattern as `summarization`
 

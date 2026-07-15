@@ -27,18 +27,28 @@ same `LLMTestCase` fields every M3.1-M3.3 single-turn wrapper already populates.
 
 ## RagasMetricWrapper (new — `deepeval_platform/evaluation/metrics/native/ragas_metric.py`)
 
-`MetricBase` subclass that does **not** delegate to a native DeepEval class (research.md §R3/§R4)
-— no `_native_metric_cls`, overrides both `__init__` and `measure()`. One class backs both
-canonical names via a constructor-time selector; `MetricFactory.register()` is called twice on the
-same class (once per name), so the factory itself needs no branching.
+`MetricBase` subclass that does **not** delegate to a native DeepEval class for scoring
+(research.md §R3/§R4) — overrides both `__init__` and `measure()`. `RagasMetricWrapper` itself is
+**not** registered with `@MetricFactory.register(...)`; it holds the shared construction/measure
+logic, parameterized by `ragas_metric_name`. Two thin subclasses — `_AnswerCorrectnessMetricWrapper`
+and `_ContextRecallMetricWrapper`, each hardcoding its `ragas_metric_name` via `super().__init__()`
+— are the ones actually decorated with `@MetricFactory.register(...)`, one name each, so the
+factory's `_registry` holds two distinct classes rather than one class shared via
+`functools.partial` (see the `_native_metric_cls` row below for why that distinction matters). The
+module's `ragas.*` imports are guarded (`try`/`except ImportError`, research.md §R5): both
+subclasses' bodies and `@MetricFactory.register(...)` decorators evaluate without referencing the
+guarded names, so both canonical names register successfully even when `ragas` is not installed —
+the resulting `ImportError` is deferred to `__init__` (see that row below), keeping the failure
+isolated to whichever Ragas metric a bot actually opts into (FR-010).
 
 | Member | Type | Notes |
 |---|---|---|
-| `__init__(threshold, deepeval_model, ragas_metric_name)` | — | `ragas_metric_name: Literal["answer_correctness", "context_recall"]`. Builds the judge via `RagasLLMAdapter(deepeval_model)`; for `"answer_correctness"` only, also builds an `OpenAIEmbeddings(model=..., api_key=...)` (same construction `QdrantVectorStoreProvider` uses, FR-014) wrapped in Ragas' own `ragas.embeddings.LangchainEmbeddingsWrapper`. Constructs `AnswerCorrectness(llm=adapter, embeddings=wrapped_embeddings)` or `ContextRecall(llm=adapter)` accordingly and stores it as `self._ragas_metric`. Stores `threshold` on `self._threshold` and initializes `self._passed: bool \| None = None` (no native `.threshold`/`.success` to proxy — research.md §R4) |
+| `_native_metric_cls` | `ClassVar[type]` | Points at a local `_RagasThresholdDefault` placeholder class (`__init__(self, threshold: float = 0.5)`) rather than a real native DeepEval class. Exists solely so `EvaluationOrchestrator._native_default_threshold`'s unmodified `_registry[name]._native_metric_cls` + `inspect.signature(...).parameters["threshold"].default` lookup keeps resolving a numeric default (`0.5`) for a bot that enables a Ragas metric without configuring its own threshold — without this, `_registry[name]` would need to be something other than an ordinary class (e.g. a bare `functools.partial`), which has no `_native_metric_cls` attribute and would make `_native_default_threshold` raise `AttributeError`, aborting the whole `evaluate()` call (FR-011/SC-004). Both subclasses inherit this ClassVar unchanged. Note: `MetricBase` declares this as `ClassVar[type[BaseMetric]]`; `_RagasThresholdDefault` does not subclass DeepEval's `BaseMetric`, so `RagasMetricWrapper` intentionally narrows the annotation to the looser `ClassVar[type]` shown above for this one subclass — harmless at runtime (no mypy/type-checker gate exists in this repo today) and consistent with `RagasMetricWrapper` being the one deliberate `MetricBase` exception (research.md §R4). |
+| `__init__(threshold, deepeval_model, ragas_metric_name)` | — | First checks the module-level `_RAGAS_IMPORT_ERROR` guard (research.md §R5) and raises `ImportError` immediately if `ragas` isn't installed — **before** referencing `AnswerCorrectness`/`ContextRecall`/`SingleTurnSample`, so a missing install fails only this constructor call, not module import. Otherwise: `ragas_metric_name: Literal["answer_correctness", "context_recall"]`, supplied by each subclass's own `__init__`, never by the caller directly. Builds the judge via `RagasLLMAdapter(deepeval_model)`; for `"answer_correctness"` only, also builds an `OpenAIEmbeddings(model=..., api_key=...)` (same construction `QdrantVectorStoreProvider` uses, FR-014) wrapped in Ragas' own `ragas.embeddings.LangchainEmbeddingsWrapper`. Constructs `AnswerCorrectness(llm=adapter, embeddings=wrapped_embeddings)` or `ContextRecall(llm=adapter)` accordingly and stores it as `self._ragas_metric`. Stores `threshold` on `self._threshold` and initializes `self._passed: bool \| None = None` (no native `.threshold`/`.success` to proxy — research.md §R4) |
 | `threshold` | `property -> float` | `self._threshold` |
 | `passed` | `property -> bool \| None` | `self._passed` |
 | `measure(context) -> MetricResult` | `async`, **overridden** | Builds a `SingleTurnSample` from `context.trace` per the field-mapping table below, `await self._ragas_metric.single_turn_ascore(sample)`, sets `self._passed = score >= self._threshold`, returns `MetricResult(score=score, threshold=self._threshold, passed=self._passed, error=None)` |
-| canonical names | — | `ragas_answer_correctness` (registered with `ragas_metric_name="answer_correctness"`), `ragas_context_recall` (registered with `ragas_metric_name="context_recall"`) — two `@MetricFactory.register(...)` applications, same class, distinguished by a small factory wrapper/partial per name (implementation detail for tasks.md; `MetricFactory.create()`'s call shape — `threshold=`, `deepeval_model=`, `**options` — is unaffected either way) |
+| canonical names | — | `ragas_answer_correctness` (`_AnswerCorrectnessMetricWrapper`, calls `super().__init__(..., ragas_metric_name="answer_correctness")`), `ragas_context_recall` (`_ContextRecallMetricWrapper`, calls `super().__init__(..., ragas_metric_name="context_recall")`) — two ordinary registered subclasses, each its own `@MetricFactory.register(...)` application; `MetricFactory.create()`'s call shape (`threshold=`, `deepeval_model=`, `**options`) is unaffected |
 
 `SingleTurnSample` field mapping (research.md §R3; both metrics read `user_input`/`reference`,
 each also reads its one metric-specific field):
@@ -67,8 +77,12 @@ Does **not** modify `LLMProviderFactory` or any concrete provider class (FR-009)
 
 ## BotMetricConfigResolver (modified — `deepeval_platform/evaluation/bot_metric_config_resolver.py`)
 
-Three new branches, following the exact per-metric-name dispatch M3.3 already established. No new
-method signatures; `resolve_metric_names`/`resolve_options` keep their existing shapes.
+Four new opt-in checks (two share a `resolve_options` fall-through), following the exact
+per-metric-name dispatch M3.3 already established: `resolve_metric_names` gains 2 new independent
+truthy checks (`g_eval`, `dag`) plus 2 more for the Ragas names (tasks.md T018), for 4 total; only 2
+new `resolve_options` branches are needed since both Ragas names fall through to the existing
+generic `{}` case. No new method signatures; `resolve_metric_names`/`resolve_options` keep their
+existing shapes.
 
 | Metric | `resolve_metric_names` inclusion check | `resolve_options` resolution |
 |---|---|---|

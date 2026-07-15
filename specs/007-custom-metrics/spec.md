@@ -167,9 +167,11 @@ executando a avaliação, e verificando que o `EvaluationResult` resultante cont
 
 ### Edge Cases
 
-- Um bot que declara um critério de `g_eval` vazio ou malformado é tratado como reprovação isolada
-  apenas de `g_eval` (`score = null`, `passed = false`, detalhe descritivo do erro), sem impedir as
-  demais métricas do mesmo trace — mesmo tratamento de falha isolada já estabelecido desde M3.1.
+- Um bot que declara um critério de `g_eval` malformado é tratado como reprovação isolada apenas de
+  `g_eval` (`score = null`, `passed = false`, detalhe descritivo do erro), sem impedir as demais
+  métricas do mesmo trace — mesmo tratamento de falha isolada já estabelecido desde M3.1. Um
+  critério vazio (`geval_criteria: ""`) não dispara essa falha isolada: por ser falsy, o resolver o
+  trata como ausente (caminho de FR-003, "não tentado, sem erro").
 - Um bot que declara uma definição de grafo de decisão inválida (ciclo, nó órfão, referência
   quebrada) é tratado como reprovação isolada apenas de `dag`, com detalhe descritivo do erro de
   construção do grafo, sem impedir as demais métricas do mesmo trace.
@@ -217,9 +219,10 @@ executando a avaliação, e verificando que o `EvaluationResult` resultante cont
   configuration declares the graph definition from FR-005. A bot that does not declare it MUST NOT
   have `dag` attempted, and no missing-required-argument error MUST be raised.
 - **FR-007**: System MUST provide a `RagasMetricWrapper` implementing the `MetricBase` contract,
-  parameterized by which underlying Ragas metric to compute, self-registered in `MetricFactory`
-  under two canonical names: `ragas_answer_correctness` (wrapping Ragas' Answer Correctness metric)
-  and `ragas_context_recall` (wrapping Ragas' Context Recall metric).
+  parameterized by which underlying Ragas metric to compute. `RagasMetricWrapper` MUST back two
+  directly-registered thin subclasses, each self-registered in `MetricFactory` under its own
+  canonical name: `ragas_answer_correctness` (wrapping Ragas' Answer Correctness metric) and
+  `ragas_context_recall` (wrapping Ragas' Context Recall metric).
 - **FR-008**: `ragas_answer_correctness` and `ragas_context_recall` MUST be registered in
   `MetricFactory` but MUST NOT be added to `RAGStrategy`'s automatic `get_metrics()` list — each is
   available only when a bot's configuration explicitly opts in (per-metric enable key in
@@ -235,7 +238,7 @@ executando a avaliação, e verificando que o `EvaluationResult` resultante cont
 - **FR-010**: System MUST add `ragas` as a new project dependency, pinned to `>=0.2.0` (the
   `SingleTurnSample`-based stable API); its absence or misconfiguration MUST NOT prevent any
   non-Ragas metric from evaluating for the same bot or trace.
-- **FR-011**: All three new metrics (`g_eval`, `dag`, `ragas_answer_correctness`,
+- **FR-011**: All four new metrics (`g_eval`, `dag`, `ragas_answer_correctness`,
   `ragas_context_recall`) MUST integrate with the evaluation pipeline established since M3.1
   (threshold resolution, timeout handling, concurrent execution, per-metric failure isolation,
   result aggregation) without requiring any change to `MetricFactory.register()`,
@@ -266,7 +269,8 @@ executando a avaliação, e verificando que o `EvaluationResult` resultante cont
   auto-wired into any strategy.
 - **RagasMetricWrapper**: New `MetricBase` subclass adapting Ragas' Answer Correctness and Context
   Recall metrics to the project's `MetricBase` contract; parameterized by which Ragas metric to
-  compute; registered under two canonical names (FR-007); opt-in per bot (FR-008); obtains its
+  compute; backs two directly-registered thin subclasses, each self-registered under its own
+  canonical name (FR-007); opt-in per bot (FR-008); obtains its
   judge LLM via a new adapter over the bot's existing `DeepEvalBaseLLM` provider (FR-009); obtains
   its embeddings model (Answer Correctness only) by reusing the project's global embedding
   configuration, the same way `QdrantVectorStoreProvider` does (FR-014); uses

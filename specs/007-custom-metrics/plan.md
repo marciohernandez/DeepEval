@@ -13,8 +13,11 @@ M3.4 adds four new opt-in metric wrappers — `g_eval`, `dag`, `ragas_answer_cor
 exact opt-in pattern M3.3 established for `summarization`/`json_correctness`/`prompt_alignment`/
 `conversational_g_eval`. `GEvalMetricWrapper` and `DAGMetricWrapper` are `MetricBase` subclasses
 (`LLMTestCase`-based, same as every M3.1-M3.3 single-turn wrapper); `RagasMetricWrapper` is also a
-`MetricBase` subclass, parameterized at construction by which of the two Ragas metrics to compute,
-so one class backs both canonical names — no `MetricFactory.register()` change needed.
+`MetricBase` subclass, parameterized at construction by which of the two Ragas metrics to compute;
+it is not itself registered, but backs two thin subclasses (`_AnswerCorrectnessMetricWrapper`,
+`_ContextRecallMetricWrapper`), each hardcoding its own `ragas_metric_name` and each registered
+directly under its own canonical name — no `MetricFactory.register()`/`create()` signature change
+needed, just two more ordinary registered subclasses.
 
 Two real design gaps close in Phase 0. First, DeepEval's native `GEval.__init__` accepts
 `evaluation_params=None` without error, but `measure()`/`a_measure()` raise `ValueError` at call
@@ -117,7 +120,7 @@ names), 1 new adapter class (`RagasLLMAdapter`), 1 new dependency (`ragas>=0.2.0
 | Principle | Check | Status |
 |---|---|---|
 | I. OOP-First | Three single-responsibility wrapper classes (one parameterized, not duplicated, across two canonical names) plus one single-responsibility adapter class — matches the M3.1-M3.3 pattern; no monolithic additions | PASS |
-| II. DeepEval-First | `GEvalMetricWrapper`/`DAGMetricWrapper` delegate 100% of scoring to native `GEval`/`DAGMetric` via `a_measure()`, verified against the installed package before writing this plan (research.md §R1/§R2). `RagasMetricWrapper` is explicitly the exception the principle itself carves out (§II: "Only when DeepEval offers no native equivalent MAY custom code be developed") — Ragas' Answer Correctness/Context Recall have no DeepEval-native equivalent, and the spec (Assumptions) is explicit that this wrapper exists for side-by-side comparison, not to compete with or replace DeepEval as primary framework | PASS |
+| II. DeepEval-First | `GEvalMetricWrapper`/`DAGMetricWrapper` delegate 100% of scoring to native `GEval`/`DAGMetric` via `a_measure()`, verified against the installed package before writing this plan (research.md §R1/§R2). `RagasMetricWrapper` is the one deliberate exception, justified per the spec's Assumptions section rather than a blanket "no native equivalent" claim (that's only literally true for Answer Correctness — DeepEval already ships a native `ContextualRecallMetric`, integrated since M3.1): Ragas is added not to fill a coverage gap but explicitly for side-by-side comparison against DeepEval-native RAG metrics, "not to reimplement or supersede them" (spec.md Assumptions) — DeepEval remains this project's primary evaluation framework | PASS |
 | III. LangChain-First | N/A for the evaluation-domain wrappers — out of scope per the principle's own text. `RagasLLMAdapter` explicitly avoids LangChain (`LangchainLLMWrapper`) in favor of adapting the project's existing `DeepEvalBaseLLM` judge directly (FR-009) — consistent with Principle III scoping LangChain to bot-orchestration code, not the evaluator's own judge-model wiring | PASS |
 | IV. TDD (NON-NEGOTIABLE) | Tests written first for all three wrappers, `RagasLLMAdapter`, the three new `BotMetricConfigResolver` branches, and the `dag_builder` invoke-vs-use-as-is divergence; ≥80% coverage enforced by existing `pytest-cov` config | PASS (process gate, enforced during `/speckit-tasks` + `/speckit-implement`) |
 | V. Zero Hardcode | No new credentials. `ragas` judge/embeddings config reuses existing `ConfigManager`-governed keys (`evaluation.llm_judge.*` via the existing judge resolution path, `embedding.model`/`embedding.dimensions`) — no new secret, no new config file, `BotMetricConfigResolver` remains the sole `bots.yaml`-key reader for these three metrics (reads exclusively through `ConfigManager`) | PASS |

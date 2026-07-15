@@ -25,10 +25,13 @@ metric = MetricFactory.create("ragas_context_recall", threshold=0.5, deepeval_mo
 - `create()` itself is unmodified — same generic `**options` pass-through M3.3 already
   generalized it to (FR-016 unchanged). No branching added for any of the four new names.
 - `register()` and the `_registry` dict are unchanged (SC-005). `g_eval` and `dag` each register
-  a distinct class; `ragas_answer_correctness`/`ragas_context_recall` both register
-  `RagasMetricWrapper`, applied twice with a different fixed `ragas_metric_name` baked in per
-  registration (e.g. via a small `functools.partial`-style binding at import time) — from
-  `MetricFactory`'s point of view these are simply two more ordinary registered subclasses.
+  a distinct class; `ragas_answer_correctness`/`ragas_context_recall` each register their own thin
+  `RagasMetricWrapper` subclass (`_AnswerCorrectnessMetricWrapper`, `_ContextRecallMetricWrapper`)
+  with a different fixed `ragas_metric_name` baked into that subclass's `__init__` — not a bare
+  `functools.partial` binding, because `EvaluationOrchestrator._native_default_threshold` needs
+  `_registry[name]._native_metric_cls` to exist (see data-model.md's `RagasMetricWrapper` section
+  for why) — from `MetricFactory`'s point of view these are simply two more ordinary registered
+  subclasses.
 - Passing `dag=` to `"g_eval"` (or `criteria=` to `"dag"`) raises the normal Python
   `TypeError: unexpected keyword argument` — unchanged pass-through behavior.
 

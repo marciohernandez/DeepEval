@@ -251,7 +251,14 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
   (`inspect.signature(MetricFactory._registry["ragas_answer_correctness"]._native_metric_cls.__init__
   ).parameters["threshold"].default == 0.5` — guards the design gap noted above so
   `EvaluationOrchestrator._native_default_threshold` keeps resolving a numeric default for a bot
-  that enables a Ragas metric without configuring its own threshold, with zero orchestrator change)
+  that enables a Ragas metric without configuring its own threshold, with zero orchestrator change);
+  and `test_constructor_raises_import_error_when_ragas_unavailable_without_breaking_registration`
+  (monkeypatches `ragas_metric._RAGAS_IMPORT_ERROR` to a dummy `ImportError` instance, then asserts
+  (a) `MetricFactory._registry["ragas_answer_correctness"]`/`["ragas_context_recall"]` are still
+  present — registration itself never touched the guarded names, research.md §R5 — and
+  (b) instantiating either registered class now raises `ImportError`, restoring the monkeypatched
+  value afterward) — closes the I1 gap: proves a missing `ragas` install isolates to whichever
+  Ragas metric a bot opts into, not a package-import-time crash of every metric
 - [ ] T015 [P] [US3] Update `tests/unit/evaluation/test_bot_metric_config_resolver.py` (touches the
   same file as T003/T009 — sequential, applied last of the three): add
   `test_ragas_answer_correctness_appended_when_enabled_truthy` (parametrized over the same truthy
@@ -286,6 +293,12 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
   concept in this project's provider abstraction, research.md §R3) — makes T013 pass; does not
   import from `deepeval_platform.llm.factory` or any concrete provider module (FR-009)
 - [ ] T017 [US3] Implement `deepeval_platform/evaluation/metrics/native/ragas_metric.py`:
+  - At module top: guard the `ragas.*` imports — `try: from ragas.dataset_schema import
+    SingleTurnSample; from ragas.embeddings import LangchainEmbeddingsWrapper; from ragas.metrics
+    import AnswerCorrectness, ContextRecall` / `except ImportError as exc:
+    _RAGAS_IMPORT_ERROR = exc` (else `_RAGAS_IMPORT_ERROR = None`) — module import must succeed
+    even when `ragas` is not installed, so T019's package-level import never raises
+    (research.md §R5, resolves the I1 gap between FR-010/the Edge Case and the design)
   - A local `_RagasThresholdDefault` placeholder class with `def __init__(self, threshold: float =
     0.5) -> None: ...` — exists solely so `EvaluationOrchestrator._native_default_threshold`'s
     unmodified `inspect.signature(...).parameters["threshold"].default` lookup keeps working for
@@ -294,7 +307,11 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
   - `RagasMetricWrapper(MetricBase)` — **not itself decorated with `@MetricFactory.register`** —
     with `_native_metric_cls: ClassVar[type] = _RagasThresholdDefault`; `__init__(self, threshold:
     float, deepeval_model: DeepEvalBaseLLM, ragas_metric_name: Literal["answer_correctness",
-    "context_recall"])` builds `judge = RagasLLMAdapter(deepeval_model)`; when
+    "context_recall"])` first checks `if _RAGAS_IMPORT_ERROR is not None: raise ImportError("ragas
+    is not installed; run `uv sync`") from _RAGAS_IMPORT_ERROR` — before referencing any guarded
+    name, so a missing install fails only this constructor call (surfaced inside
+    `_measure_one`'s existing try/except, M3.1), never module import; otherwise builds `judge =
+    RagasLLMAdapter(deepeval_model)`; when
     `ragas_metric_name == "answer_correctness"`, reads `embedding.model`/`embedding.dimensions`
     from `ConfigManager.instance()` (constructor-injected `config: ConfigManager | None = None`
     param, defaulting to `ConfigManager.instance()`, mirroring every other resolver/orchestrator
@@ -335,8 +352,11 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
 - [ ] T019 [US3] Update `deepeval_platform/evaluation/metrics/native/__init__.py` (touches the same
   file as T006/T012 — sequential, applied last of the three): add `ragas_metric,  # noqa: F401` to
   the alphabetically-ordered import tuple, immediately before `role_adherence_metric` — triggers
-  both `RagasMetricWrapper` subclasses' self-registration (depends on T017)
-- [ ] T020 [US3] Update `config/bots.yaml`: add
+  both `RagasMetricWrapper` subclasses' self-registration (depends on T017); this plain import is
+  safe even when `ragas` isn't installed because T017's guard keeps `ragas_metric.py` itself
+  import-clean (research.md §R5) — no try/except needed at this call site
+- [ ] T020 [US3] Update `config/bots.yaml` (touches the same file as T007, same `test_rag_bot`
+  block — additive, non-conflicting): add
   ```yaml
       metrics:
         ragas_answer_correctness:
@@ -375,8 +395,9 @@ three stories.
   `test_ragas_measure_exception_or_timeout_isolated_not_blocking` (a fake-registered
   `ragas_answer_correctness`/`ragas_context_recall` whose `measure()` raises, and a separate case
   where it exceeds the configured timeout via `asyncio.wait_for` — both isolate only that Ragas
-  metric's `MetricResult`, sibling completes normally — spec.md Edge Cases, covers the "ragas not
-  installed/misconfigured" scenario as an ordinary caught exception per research.md §R5) and
+  metric's `MetricResult`, sibling completes normally — spec.md Edge Cases, covers the
+  "misconfigured" half of the scenario as an ordinary caught exception; the "not installed" half is
+  covered at the unit level by T014's guarded-import test, per research.md §R5) and
   `test_all_four_new_metrics_enabled_simultaneously_run_independently` (a single `evaluate()` call
   requesting `g_eval`, `dag`, `ragas_answer_correctness`, and `ragas_context_recall` together, each
   fake-registered with distinct outcomes — one raising, one succeeding, etc. — asserts every
