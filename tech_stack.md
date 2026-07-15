@@ -628,16 +628,22 @@ QDRANT_API_KEY=               # se usar autenticação
 PROMPT_OPTIMIZER_ALGORITHM=gepa         # gepa | miprov2
 PROMPT_OPTIMIZER_MAX_CONCURRENT=10
 
-# Datasets Sintéticos
-SYNTHETIC_DOCS_DIR=./config/knowledge_base    # documentos da empresa (PDFs, MDs, DOCXs)
-SYNTHETIC_OUTPUT_DIR=./datasets               # onde salvar os datasets gerados
-SYNTHETIC_GOLDENS_PER_PERSONA=20              # goldens por persona (single-turn)
-SYNTHETIC_CONVERSATIONS_PER_PERSONA=5         # conversas simuladas por persona (multi-turn)
-
 # Sistema
 SCORE_THRESHOLD=0.7
 OUTPUT_DIR=./resultados
 DRY_RUN=false
+```
+
+Configurações não secretas de datasets sintéticos ficam em `config/settings.yaml`, nunca no
+`.env`:
+
+```yaml
+synthetic:
+  docs_dir: ./config/knowledge_base
+  output_dir: ./datasets
+  goldens_per_persona: 20
+  conversations_per_persona: 5
+  max_conversation_turns: 15
 ```
 
 ---

@@ -1,9 +1,24 @@
-"""Domain models for repository layer (US5, US6)."""
+"""Domain models for repository layer (US5, US6, M4.1)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
+
+
+@dataclass
+class DocumentFailure:
+    """Structured unreadable/parser-invalid document failure (M4.1 data-model.md).
+
+    stage distinguishes a file the loader could not open ("readability") from
+    one it opened but could not parse ("parsing").
+    """
+
+    path: str
+    stage: Literal["readability", "parsing"]
+    error_type: str
+    message: str
 
 
 @dataclass

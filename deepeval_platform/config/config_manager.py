@@ -105,6 +105,20 @@ class ConfigManager:
             raise ConfigError(key, ".env or config/*.yaml")
         return entry.value
 
+    def list_subkeys(self, prefix: str) -> list[str]:
+        """Return the sorted, distinct immediate child segments under a dotted prefix.
+
+        Only keys strictly nested under prefix contribute; the leading segment
+        after the prefix is returned once even when it has deeper descendants.
+        """
+        needle = f"{prefix}."
+        children: set[str] = set()
+        for key in self._store:
+            if key.startswith(needle):
+                remainder = key[len(needle):]
+                children.add(remainder.split(".", 1)[0])
+        return sorted(children)
+
     def get_optional(self, key: str, default: str = "") -> str:
         try:
             return self.get(key)

@@ -371,12 +371,14 @@ EvaluationDataset (DeepEval)
 Evaluator (métricas DeepEval)
 ```
 
-**Configuração no `.env`:**
-```bash
-SYNTHETIC_DOCS_DIR=./config/knowledge_base   # pasta com documentos da empresa
-SYNTHETIC_OUTPUT_DIR=./datasets              # onde salvar os datasets gerados
-SYNTHETIC_GOLDENS_PER_PERSONA=20             # quantos goldens por persona (single-turn)
-SYNTHETIC_CONVERSATIONS_PER_PERSONA=5        # quantas conversas por persona (multi-turn)
+**Configuração em `config/settings.yaml`:**
+```yaml
+synthetic:
+  docs_dir: ./config/knowledge_base     # pasta com documentos da empresa
+  output_dir: ./datasets                # onde salvar os datasets gerados
+  goldens_per_persona: 20               # goldens por persona (single-turn)
+  conversations_per_persona: 5         # conversas por persona (multi-turn)
+  max_conversation_turns: 15
 ```
 
 ---
