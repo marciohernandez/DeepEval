@@ -80,3 +80,36 @@ class TestMetricFactoryCreate:
         )
         MetricFactory.create("dummy_config_test", threshold=0.8, deepeval_model=MagicMock())
         instance_spy.assert_not_called()
+
+    def test_create_forwards_generic_options_to_wrapper(self):
+        class _DummyMetricWithExtraOption(MetricBase):
+            _native_metric_cls = MagicMock()
+
+            def __init__(self, threshold, deepeval_model, extra_kwarg):
+                self.threshold_arg = threshold
+                self.deepeval_model_arg = deepeval_model
+                self.extra_kwarg = extra_kwarg
+
+        MetricFactory.register("dummy_extra_option_test")(_DummyMetricWithExtraOption)
+        deepeval_model = MagicMock()
+
+        result = MetricFactory.create(
+            "dummy_extra_option_test",
+            threshold=0.8,
+            deepeval_model=deepeval_model,
+            extra_kwarg="value",
+        )
+
+        assert result.extra_kwarg == "value"
+        assert result.threshold_arg == 0.8
+        assert result.deepeval_model_arg is deepeval_model
+
+    def test_create_with_no_extra_options_matches_existing_signature(self):
+        MetricFactory.register("dummy_no_extra_options_test")(_DummyMetricA)
+        deepeval_model = MagicMock()
+
+        result = MetricFactory.create(
+            "dummy_no_extra_options_test", threshold=0.8, deepeval_model=deepeval_model
+        )
+
+        assert isinstance(result, _DummyMetricA)

@@ -5,6 +5,8 @@ bots:
     metrics:
       faithfulness:
         threshold: 0.8
+      summarization:
+        enabled: true
     field_mapping:
       input: input.data.question
       output: output.data.answer
@@ -13,6 +15,9 @@ bots:
   test_agent_bot:
     bot_type: agent
     platform: langchain
+    prompt_instructions:
+      - "Always respond in JSON"
+      - "Never mention competitors"
     field_mapping:
       input: input.data.messages.0.content
       output: output.data.messages.-1.content
@@ -24,6 +29,7 @@ bots:
   test_conversation_bot:
     bot_type: conversation
     platform: flowise
+    conversational_geval_criteria: "Stays on-topic across turns"
     field_mapping:
       messages: output.data.history
       messages_item:

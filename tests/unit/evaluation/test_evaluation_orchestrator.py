@@ -10,6 +10,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from deepeval.errors import MissingTestCaseParamsError
+from deepeval.test_case import Turn
+from pydantic import ValidationError
+
 from deepeval_platform.evaluation.errors import (
     ConfigResolutionError,
     DuplicateMetricRequestError,
@@ -18,7 +22,7 @@ from deepeval_platform.evaluation.errors import (
 )
 from deepeval_platform.evaluation.evaluation_orchestrator import EvaluationOrchestrator
 from deepeval_platform.evaluation.evaluation_result import MetricResult
-from deepeval_platform.normalization.models import NormalizedTrace
+from deepeval_platform.normalization.models import Message, NormalizedTrace
 
 
 class _FakeNativeAnswerRelevancy:
@@ -278,6 +282,347 @@ class TestMissingConfigUsesNativeDefault:
             _FakeNativeFaithfulness.__init__
         ).parameters["threshold"].default
         assert result.metrics["faithfulness"].threshold == native_default
+
+
+class TestResolvedOptionsForwardedToMetricFactory:
+    async def test_resolved_options_forwarded_to_metric_factory(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        captured_kwargs: dict[str, dict] = {}
+
+        def create(name, *, threshold, deepeval_model, **options):
+            captured_kwargs[name] = options
+            instance = MagicMock()
+            instance.measure = AsyncMock(
+                return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+            )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+
+        resolver = MagicMock()
+
+        def resolve_options(bot_id, names):
+            name = names[0]
+            if name == "faithfulness":
+                return {"faithfulness": {"extra": "value"}}
+            return {name: {}}
+
+        resolver.resolve_options.side_effect = resolve_options
+
+        orchestrator = EvaluationOrchestrator(config=stub_config, resolver=resolver)
+
+        await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=["answer_relevancy", "faithfulness"]
+        )
+
+        assert captured_kwargs["faithfulness"] == {"extra": "value"}
+        assert captured_kwargs["answer_relevancy"] == {}
+
+
+class TestNoConfiguredOptionsMatchesPriorBehavior:
+    async def test_no_configured_options_matches_byte_identical_prior_behavior(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        resolver = MagicMock()
+        resolver.resolve_options.side_effect = lambda bot_id, names: {names[0]: {}}
+
+        orchestrator = EvaluationOrchestrator(config=stub_config, resolver=resolver)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=["answer_relevancy", "faithfulness"]
+        )
+
+        assert set(result.metrics.keys()) == {"answer_relevancy", "faithfulness"}
+        assert result.metrics["answer_relevancy"].score == 0.9
+        assert result.metrics["faithfulness"].score == 0.9
+        assert result.passed is True
+
+
+class TestRoleAdherenceMissingChatbotRoleIsolatedNotSkipped:
+    async def test_role_adherence_missing_chatbot_role_isolated_not_skipped(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        class _FakeNativeRoleAdherence:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeRoleAdherenceWrapper:
+            _native_metric_cls = _FakeNativeRoleAdherence
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            "role_adherence": _FakeRoleAdherenceWrapper,
+            "bias": _FakeBiasWrapper,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            if name == "role_adherence":
+                instance.measure = AsyncMock(
+                    side_effect=MissingTestCaseParamsError("chatbot_role is required")
+                )
+            else:
+                instance.measure = AsyncMock(
+                    return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+                )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_conversation_bot", metric_names=["role_adherence", "bias"]
+        )
+
+        failed = result.metrics["role_adherence"]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert failed.error.category == "MissingTestCaseParamsError"
+        assert result.metrics["bias"].passed is True
+
+
+class TestMalformedOptInConfigIsolatedNotBlocking:
+    async def test_malformed_opt_in_config_isolated_not_blocking(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        class _FakeNativeJsonCorrectness:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeJsonCorrectnessWrapper:
+            _native_metric_cls = _FakeNativeJsonCorrectness
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            "json_correctness": _FakeJsonCorrectnessWrapper,
+            "bias": _FakeBiasWrapper,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            instance.measure = AsyncMock(
+                return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+            )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+
+        resolver = MagicMock()
+
+        def resolve_options(bot_id, names):
+            name = names[0]
+            if name == "json_correctness":
+                raise ImportError("no module named 'bad.module.path'")
+            return {name: {}}
+
+        resolver.resolve_options.side_effect = resolve_options
+
+        orchestrator = EvaluationOrchestrator(config=stub_config, resolver=resolver)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=["json_correctness", "bias"]
+        )
+
+        failed = result.metrics["json_correctness"]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert result.metrics["bias"].passed is True
+
+
+class TestMetricWrapperConstructionFailureIsolatedNotBlocking:
+    async def test_metric_wrapper_construction_failure_isolated_not_blocking(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        class _FakeJsonCorrectnessWrapperRaisesOnInit:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            "json_correctness": _FakeJsonCorrectnessWrapperRaisesOnInit,
+            "bias": _FakeBiasWrapper,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            if name == "json_correctness":
+                raise TypeError("missing required keyword argument: 'expected_schema'")
+            instance = MagicMock()
+            instance.measure = AsyncMock(
+                return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+            )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+
+        resolver = MagicMock()
+        resolver.resolve_options.side_effect = lambda bot_id, names: {names[0]: {}}
+
+        orchestrator = EvaluationOrchestrator(config=stub_config, resolver=resolver)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=["json_correctness", "bias"]
+        )
+
+        failed = result.metrics["json_correctness"]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert result.metrics["bias"].passed is True
+
+
+class TestInvalidMessageRoleIsolatesOnlyConversationalMetrics:
+    async def test_invalid_message_role_isolates_only_conversational_metrics(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory
+    ):
+        trace = NormalizedTrace(
+            input="hi",
+            output="hello",
+            messages=[Message(role="system", content="You are a bot")],
+        )
+
+        try:
+            Turn(role="system", content="You are a bot")
+            raise AssertionError("expected Turn(role='system', ...) to raise ValidationError")
+        except ValidationError as exc:
+            role_validation_error = exc
+
+        class _FakeNativeConversationCompleteness:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeConversationCompletenessWrapper:
+            _native_metric_cls = _FakeNativeConversationCompleteness
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            "conversation_completeness": _FakeConversationCompletenessWrapper,
+            "bias": _FakeBiasWrapper,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            if name == "conversation_completeness":
+                instance.measure = AsyncMock(side_effect=role_validation_error)
+            else:
+                instance.measure = AsyncMock(
+                    return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+                )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace,
+            bot_id="test_conversation_bot",
+            metric_names=["conversation_completeness", "bias"],
+        )
+
+        failed = result.metrics["conversation_completeness"]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert failed.error.category == "ValidationError"
+        assert result.metrics["bias"].passed is True
+
+
+class TestEmptyOrSingleTurnMessagesIsolatesOnlyMultiTurnConversationalMetrics:
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            [],
+            [Message(role="user", content="Hi")],
+        ],
+    )
+    async def test_empty_or_single_turn_messages_isolates_only_multi_turn_conversational_metrics(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, messages
+    ):
+        trace = NormalizedTrace(input="hi", output="hello", messages=messages)
+
+        missing_params_error = MissingTestCaseParamsError(
+            "ConversationalTestCase requires at least one Turn"
+        )
+
+        multi_turn_names = [
+            "conversation_completeness",
+            "turn_relevancy",
+            "knowledge_retention",
+            "role_adherence",
+            "conversational_g_eval",
+        ]
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        fake_registry = {"bias": _FakeBiasWrapper}
+        for name in multi_turn_names:
+            fake_native = type(
+                f"_FakeNative_{name}",
+                (),
+                {"__init__": lambda self, threshold=0.5, model=None, async_mode=True: None},
+            )
+            fake_registry[name] = type(
+                f"_Fake_{name}_Wrapper", (), {"_native_metric_cls": fake_native}
+            )
+
+        mock_metric_factory._registry = fake_registry
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            if name in multi_turn_names:
+                instance.measure = AsyncMock(side_effect=missing_params_error)
+            else:
+                instance.measure = AsyncMock(
+                    return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+                )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace,
+            bot_id="test_conversation_bot",
+            metric_names=[*multi_turn_names, "bias"],
+        )
+
+        for name in multi_turn_names:
+            failed = result.metrics[name]
+            assert failed.score is None
+            assert failed.passed is False
+            assert failed.error is not None
+            assert failed.error.category == "MissingTestCaseParamsError"
+        assert result.metrics["bias"].passed is True
 
 
 class TestUnknownBotIdUsesNativeDefaults:

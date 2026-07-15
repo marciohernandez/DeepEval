@@ -25,7 +25,7 @@ class TestAgentStrategy:
 
     def test_contains_expected_metric_names(self):
         metrics = AgentStrategy().get_metrics()
-        assert metrics == ["tool_correctness", "task_completion"]
+        assert metrics == ["tool_correctness", "task_completion", "bias", "toxicity"]
 
     def test_distinct_from_rag_strategy(self):
         assert set(AgentStrategy().get_metrics()) != set(RAGStrategy().get_metrics())

@@ -11,4 +11,4 @@ class AgentStrategy(EvaluationStrategyBase):
     """
 
     def get_metrics(self) -> list[str]:
-        return ["tool_correctness", "task_completion"]
+        return ["tool_correctness", "task_completion", "bias", "toxicity"]

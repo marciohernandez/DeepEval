@@ -212,6 +212,44 @@ class TestGetOptional:
 
 # ── get_typed ─────────────────────────────────────────────────────────────────
 
+# ── YAML list flattening ────────────────────────────────────────────────────
+
+class TestYamlListFlattening:
+    def test_yaml_list_value_flattened_into_indexed_keys(self, tmp_path, monkeypatch):
+        _make_env(tmp_path, "")
+        _make_settings(
+            tmp_path,
+            "bots:\n"
+            "  test_bot:\n"
+            "    prompt_instructions:\n"
+            "      - Be concise\n"
+            "      - Use bullet points\n",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        cfg = ConfigManager.instance()
+        assert cfg.get("bots.test_bot.prompt_instructions.0") == "Be concise"
+        assert cfg.get("bots.test_bot.prompt_instructions.1") == "Use bullet points"
+
+    def test_yaml_scalar_and_dict_values_unaffected_by_list_branch(self, tmp_path, monkeypatch):
+        _make_env(tmp_path, "")
+        _make_settings(
+            tmp_path,
+            "embedding:\n"
+            "  model: text-embedding-3-small\n"
+            "  dimensions: 1536\n"
+            "bots:\n"
+            "  test_bot:\n"
+            "    prompt_instructions:\n"
+            "      - Be concise\n",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        cfg = ConfigManager.instance()
+        assert cfg.get("embedding.model") == "text-embedding-3-small"
+        assert cfg.get("embedding.dimensions") == "1536"
+
+
 class TestGetTyped:
     def test_casts_to_int(self, tmp_path, monkeypatch):
         _make_env(tmp_path, "")
