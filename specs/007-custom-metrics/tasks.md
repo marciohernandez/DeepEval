@@ -52,8 +52,12 @@ default every other native metric in this project uses — with zero change to
 
 **Purpose**: Add the one new project dependency this milestone introduces.
 
-- [ ] T001 Add `"ragas>=0.2.0"` to the `dependencies` list in `pyproject.toml` (FR-010), then run
-  `uv sync` to install it — required before T013/T014/T017/T019 can import from `ragas.*`
+- [X] T001 Add `"ragas>=0.2.0"` to the `dependencies` list in `pyproject.toml` (FR-010), then run
+  `uv sync` to install it — required before T013/T014/T017/T019 can import from `ragas.*`. Also
+  pinned `"langchain-community>=0.4.0,<0.4.2"` as a direct dependency: `ragas` (0.2.x-0.4.x, all
+  tested) unconditionally imports `langchain_community.chat_models.vertexai` at module load, which
+  langchain-community removed in 0.4.2+; nothing else in this project imports `langchain_community`,
+  and `langchain`/`langchain-core` remain on the required v1.x line.
 
 ---
 
@@ -80,7 +84,7 @@ bot's `bots.yaml` entry declares `geval_criteria` — no `EvaluationStrategy.get
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T002 [P] [US1] Write `tests/unit/evaluation/metrics/native/test_g_eval_metric.py`:
+- [X] T002 [P] [US1] Write `tests/unit/evaluation/metrics/native/test_g_eval_metric.py`:
   `test_registered_under_canonical_name` (`MetricFactory._registry["g_eval"] is GEvalMetricWrapper`),
   `test_wraps_native_g_eval` (`GEvalMetricWrapper._native_metric_cls is GEval` from
   `deepeval.metrics`), and `test_criteria_and_fixed_evaluation_params_forwarded_to_native_constructor`
@@ -91,7 +95,7 @@ bot's `bots.yaml` entry declares `geval_criteria` — no `EvaluationStrategy.get
   `evaluation_params == [SingleTurnParams.INPUT, SingleTurnParams.ACTUAL_OUTPUT]` — asserting the
   research.md §R1 fix (native `GEval.measure()` raises `ValueError` when `evaluation_params` is
   falsy; this wrapper must never hit that path)
-- [ ] T003 [P] [US1] Update `tests/unit/evaluation/test_bot_metric_config_resolver.py`: add
+- [X] T003 [P] [US1] Update `tests/unit/evaluation/test_bot_metric_config_resolver.py`: add
   `test_g_eval_appended_only_when_geval_criteria_set` and
   `test_g_eval_omitted_when_geval_criteria_absent` to `TestResolveMetricNames`, and
   `test_g_eval_resolves_criteria` (`resolve_options("test_bot", ["g_eval"])` with
@@ -100,7 +104,7 @@ bot's `bots.yaml` entry declares `geval_criteria` — no `EvaluationStrategy.get
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Implement `deepeval_platform/evaluation/metrics/native/g_eval_metric.py`:
+- [X] T004 [US1] Implement `deepeval_platform/evaluation/metrics/native/g_eval_metric.py`:
   `GEvalMetricWrapper(MetricBase)` with `_native_metric_cls = GEval` (`from deepeval.metrics import
   GEval`), `__init__(self, threshold: float, deepeval_model: DeepEvalBaseLLM, criteria: str)`
   constructing `self._native = GEval(name="Custom Criteria", criteria=criteria,
@@ -108,7 +112,7 @@ bot's `bots.yaml` entry declares `geval_criteria` — no `EvaluationStrategy.get
   model=deepeval_model, async_mode=True)` (`SingleTurnParams` from `deepeval.test_case`, verified
   importable against installed `deepeval==4.0.7`), `@MetricFactory.register("g_eval")` — no
   `_build_test_case` override, same as every other single-turn wrapper — makes T002 pass
-- [ ] T005 [US1] Update `deepeval_platform/evaluation/bot_metric_config_resolver.py`: in
+- [X] T005 [US1] Update `deepeval_platform/evaluation/bot_metric_config_resolver.py`: in
   `resolve_metric_names`, append a check `if self._config.get_optional(f"bots.{bot_id}.geval_criteria",
   default=""):  metric_names.append("g_eval")` immediately after the existing
   `conversational_g_eval` check (data-model.md's fixed append order); in `resolve_options`, add
@@ -116,10 +120,10 @@ bot's `bots.yaml` entry declares `geval_criteria` — no `EvaluationStrategy.get
   `_resolve_g_eval_options(self, bot_id)` method returning
   `{"criteria": self._config.get_optional(f"bots.{bot_id}.geval_criteria", default="")}` — makes
   T003 pass
-- [ ] T006 [US1] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
+- [X] T006 [US1] Update `deepeval_platform/evaluation/metrics/native/__init__.py`: add
   `g_eval_metric,  # noqa: F401` to the existing alphabetically-ordered import tuple, immediately
   before `hallucination_metric` — triggers `GEvalMetricWrapper`'s self-registration (depends on T004)
-- [ ] T007 [US1] Update `config/bots.yaml`: add `geval_criteria: "Response must stay formal and
+- [X] T007 [US1] Update `config/bots.yaml`: add `geval_criteria: "Response must stay formal and
   never promise a delivery date"` under `test_rag_bot` (sibling of its existing `metrics:` block),
   per contracts/evaluation-api.md's Configuration surface example — demonstrates opt-in activation
   for the quickstart manual check
@@ -143,14 +147,19 @@ research.md §R2) to obtain the `DeepAcyclicGraph`.
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T008 [P] [US2] Write `tests/unit/evaluation/metrics/native/test_dag_metric.py`:
+- [X] T008 [P] [US2] Write `tests/unit/evaluation/metrics/native/test_dag_metric.py`:
   `test_registered_under_canonical_name` (`MetricFactory._registry["dag"] is DAGMetricWrapper`),
   `test_wraps_native_dag_metric` (`DAGMetricWrapper._native_metric_cls is DAGMetric` from
   `deepeval.metrics`), and `test_dag_instance_forwarded_to_native_constructor`
   (`DAGMetricWrapper(threshold=0.5, deepeval_model=MagicMock(spec=DeepEvalBaseLLM),
   dag=MagicMock(spec=DeepAcyclicGraph))` constructs its native `DAGMetric` with that exact `dag`
-  instance and a fixed literal `name`, data-model.md)
-- [ ] T009 [P] [US2] Update `tests/unit/evaluation/test_bot_metric_config_resolver.py`: add a
+  instance and a fixed literal `name`, data-model.md) — **implementation note**: real
+  `DAGMetric.__init__` (installed `deepeval==4.0.7`) eagerly reads `dag.root_nodes`/`dag.multiturn`
+  and deep-copies the graph (`copy_graph`), so a bare `spec=DeepAcyclicGraph` mock can't reach an
+  `is`-identity assertion on `metric._native.dag`; the test instead patches
+  `dag_metric.DAGMetric` and asserts the wrapper calls it with the exact `dag=` object, which
+  verifies the same forwarding contract without depending on `DAGMetric`'s internal copy behavior
+- [X] T009 [P] [US2] Update `tests/unit/evaluation/test_bot_metric_config_resolver.py`: add a
   module-level dummy zero-argument callable (e.g. `def build_dummy_dag() -> str: return
   "dag-instance-sentinel"`, mirroring the existing `DummySchema` real-importable-dummy pattern) to
   exercise the *invoked* resolution path; add `test_dag_appended_only_when_dag_builder_set` and
@@ -166,13 +175,13 @@ research.md §R2) to obtain the `DeepAcyclicGraph`.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Implement `deepeval_platform/evaluation/metrics/native/dag_metric.py`:
+- [X] T010 [US2] Implement `deepeval_platform/evaluation/metrics/native/dag_metric.py`:
   `DAGMetricWrapper(MetricBase)` with `_native_metric_cls = DAGMetric` (`from deepeval.metrics
   import DAGMetric`), `__init__(self, threshold: float, deepeval_model: DeepEvalBaseLLM, dag:
   DeepAcyclicGraph)` (`from deepeval.metrics.dag import DeepAcyclicGraph`) constructing
   `self._native = DAGMetric(name="Decision Graph", dag=dag, threshold=threshold,
   model=deepeval_model, async_mode=True)`, `@MetricFactory.register("dag")` — makes T008 pass
-- [ ] T011 [US2] Update `deepeval_platform/evaluation/bot_metric_config_resolver.py` (touches the
+- [X] T011 [US2] Update `deepeval_platform/evaluation/bot_metric_config_resolver.py` (touches the
   same file as T005 — sequential, applied after it): in `resolve_metric_names`, append a check for
   `bots.{bot_id}.dag_builder` immediately after the new `g_eval` check, appending `"dag"`; in
   `resolve_options`, add `elif name == "dag": options[name] = self._resolve_dag_options(bot_id)`
@@ -182,7 +191,7 @@ research.md §R2) to obtain the `DeepAcyclicGraph`.
   attribute with zero arguments before returning `{"dag": <the invocation's return value>}`
   (research.md §R2 — the one resolver method in this project that calls its resolved attribute
   rather than using it as-is) — makes T009 pass
-- [ ] T012 [US2] Update `deepeval_platform/evaluation/metrics/native/__init__.py` (touches the same
+- [X] T012 [US2] Update `deepeval_platform/evaluation/metrics/native/__init__.py` (touches the same
   file as T006 — sequential, applied after it): add `dag_metric,  # noqa: F401` to the
   alphabetically-ordered import tuple, immediately before `faithfulness_metric` — triggers
   `DAGMetricWrapper`'s self-registration (depends on T010)
@@ -210,7 +219,7 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T013 [P] [US3] Write `tests/unit/llm/test_ragas_adapter.py`:
+- [X] T013 [P] [US3] Write `tests/unit/llm/test_ragas_adapter.py`:
   `test_agenerate_text_delegates_to_deepeval_model_a_generate` (a `RagasLLMAdapter` wrapping a
   `MagicMock(spec=DeepEvalBaseLLM)` whose `a_generate` is an `AsyncMock` returning
   `("generated text", TokenUsage(...))`; `await adapter.agenerate_text(prompt=<PromptValue-like
@@ -225,7 +234,7 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
   `from deepeval_platform.llm.factory import` and no
   `from deepeval_platform.llm.{anthropic,openai,openrouter}_provider import` — FR-009: must not
   alter `LLMProviderFactory` or any concrete provider)
-- [ ] T014 [P] [US3] Write `tests/unit/evaluation/metrics/native/test_ragas_metric.py`:
+- [X] T014 [P] [US3] Write `tests/unit/evaluation/metrics/native/test_ragas_metric.py`:
   `test_answer_correctness_registered_under_canonical_name` and
   `test_context_recall_registered_under_canonical_name` (each `MetricFactory._registry[name]` is a
   distinct `RagasMetricWrapper` subclass); `test_answer_correctness_constructs_llm_and_embeddings`
@@ -259,7 +268,7 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
   (b) instantiating either registered class now raises `ImportError`, restoring the monkeypatched
   value afterward) — closes the I1 gap: proves a missing `ragas` install isolates to whichever
   Ragas metric a bot opts into, not a package-import-time crash of every metric
-- [ ] T015 [P] [US3] Update `tests/unit/evaluation/test_bot_metric_config_resolver.py` (touches the
+- [X] T015 [P] [US3] Update `tests/unit/evaluation/test_bot_metric_config_resolver.py` (touches the
   same file as T003/T009 — sequential, applied last of the three): add
   `test_ragas_answer_correctness_appended_when_enabled_truthy` (parametrized over the same truthy
   values as the existing `summarization` test),
@@ -280,7 +289,7 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
 
 ### Implementation for User Story 3
 
-- [ ] T016 [US3] Implement `deepeval_platform/llm/ragas_adapter.py`: `RagasLLMAdapter` implementing
+- [X] T016 [US3] Implement `deepeval_platform/llm/ragas_adapter.py`: `RagasLLMAdapter` implementing
   `ragas.llms.base.BaseRagasLLM`'s abstract surface — `__init__(self, deepeval_model:
   DeepEvalBaseLLM)` stores the wrapped judge; `async def agenerate_text(self, prompt, n=1,
   temperature=0.01, stop=None, callbacks=None)` calls `await
@@ -292,7 +301,7 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
   path); `def is_finished(self, response) -> bool: return True` (no partial/streaming-completion
   concept in this project's provider abstraction, research.md §R3) — makes T013 pass; does not
   import from `deepeval_platform.llm.factory` or any concrete provider module (FR-009)
-- [ ] T017 [US3] Implement `deepeval_platform/evaluation/metrics/native/ragas_metric.py`:
+- [X] T017 [US3] Implement `deepeval_platform/evaluation/metrics/native/ragas_metric.py`:
   - At module top: guard the `ragas.*` imports — `try: from ragas.dataset_schema import
     SingleTurnSample; from ragas.embeddings import LangchainEmbeddingsWrapper; from ragas.metrics
     import AnswerCorrectness, ContextRecall` / `except ImportError as exc:
@@ -340,7 +349,7 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
     ragas_metric_name="context_recall")` — both inherit `_native_metric_cls` from
     `RagasMetricWrapper`, satisfying `_native_default_threshold` unmodified
   - Makes T014 pass (depends on T016)
-- [ ] T018 [US3] Update `deepeval_platform/evaluation/bot_metric_config_resolver.py` (touches the
+- [X] T018 [US3] Update `deepeval_platform/evaluation/bot_metric_config_resolver.py` (touches the
   same file as T005/T011 — sequential, applied last of the three): in `resolve_metric_names`,
   append the two independent truthy checks for `bots.{bot_id}.metrics.ragas_answer_correctness.enabled`
   and `bots.{bot_id}.metrics.ragas_context_recall.enabled` (same `_TRUTHY_VALUES` pattern as
@@ -349,13 +358,13 @@ an `EvaluationContext` from a `NormalizedTrace` for that bot, run evaluation, an
   needs no new branch for either name — both already fall through to the existing generic `else:
   options[name] = {}` (data-model.md: the selector is fixed per canonical name at registration, not
   resolved per-bot) — makes T015 pass
-- [ ] T019 [US3] Update `deepeval_platform/evaluation/metrics/native/__init__.py` (touches the same
+- [X] T019 [US3] Update `deepeval_platform/evaluation/metrics/native/__init__.py` (touches the same
   file as T006/T012 — sequential, applied last of the three): add `ragas_metric,  # noqa: F401` to
   the alphabetically-ordered import tuple, immediately before `role_adherence_metric` — triggers
   both `RagasMetricWrapper` subclasses' self-registration (depends on T017); this plain import is
   safe even when `ragas` isn't installed because T017's guard keeps `ragas_metric.py` itself
   import-clean (research.md §R5) — no try/except needed at this call site
-- [ ] T020 [US3] Update `config/bots.yaml` (touches the same file as T007, same `test_rag_bot`
+- [X] T020 [US3] Update `config/bots.yaml` (touches the same file as T007, same `test_rag_bot`
   block — additive, non-conflicting): add
   ```yaml
       metrics:
@@ -381,7 +390,7 @@ All three user stories work independently and together.
 **Purpose**: Cross-story edge case coverage (spec.md Edge Cases) and final verification across all
 three stories.
 
-- [ ] T021 [P] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
+- [X] T021 [P] Update `tests/unit/evaluation/test_evaluation_orchestrator.py`: add
   `test_malformed_g_eval_criteria_isolated_not_blocking` (an empty-string `criteria` reaching
   `GEval.__init__`/`measure()` raises, driven through a real or fake-registered `g_eval` name
   alongside a sibling metric name in the same `evaluate()` call — asserts `g_eval`'s `MetricResult`
@@ -390,7 +399,7 @@ three stories.
   `test_invalid_dag_definition_isolated_not_blocking` (a `dag_builder` resolution or `DAGMetric`
   construction/measure failure — cycle, orphan node, broken reference — isolates only `dag`'s
   `MetricResult`, sibling completes normally) — spec.md Edge Cases (first two bullets)
-- [ ] T022 Update `tests/unit/evaluation/test_evaluation_orchestrator.py` (touches the same file as
+- [X] T022 Update `tests/unit/evaluation/test_evaluation_orchestrator.py` (touches the same file as
   T021 — sequential, applied after it): add
   `test_ragas_measure_exception_or_timeout_isolated_not_blocking` (a fake-registered
   `ragas_answer_correctness`/`ragas_context_recall` whose `measure()` raises, and a separate case
@@ -403,7 +412,7 @@ three stories.
   fake-registered with distinct outcomes — one raising, one succeeding, etc. — asserts every
   `MetricResult` reflects only its own outcome, none blocks or waits on another, mirroring M3.3's
   own multi-opt-in isolation test) — spec.md Edge Cases (last two bullets), SC-004
-- [ ] T023 Run the full quickstart.md validation suite — `uv run pytest tests/unit/evaluation -v`,
+- [X] T023 Run the full quickstart.md validation suite — `uv run pytest tests/unit/evaluation -v`,
   `uv run pytest tests/unit/llm/test_ragas_adapter.py -v`, and `uv run pytest
   --cov=deepeval_platform --cov-report=term-missing --cov-fail-under=80` — confirm every spec.md
   acceptance scenario and edge case in quickstart.md's mapping table passes (including all

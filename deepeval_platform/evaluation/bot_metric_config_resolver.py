@@ -37,6 +37,24 @@ class BotMetricConfigResolver:
         ):
             metric_names.append("conversational_g_eval")
 
+        if self._config.get_optional(f"bots.{bot_id}.geval_criteria", default=""):
+            metric_names.append("g_eval")
+
+        if self._config.get_optional(f"bots.{bot_id}.dag_builder", default=""):
+            metric_names.append("dag")
+
+        ragas_answer_correctness = self._config.get_optional(
+            f"bots.{bot_id}.metrics.ragas_answer_correctness.enabled", default=""
+        )
+        if ragas_answer_correctness.strip().lower() in _TRUTHY_VALUES:
+            metric_names.append("ragas_answer_correctness")
+
+        ragas_context_recall = self._config.get_optional(
+            f"bots.{bot_id}.metrics.ragas_context_recall.enabled", default=""
+        )
+        if ragas_context_recall.strip().lower() in _TRUTHY_VALUES:
+            metric_names.append("ragas_context_recall")
+
         return metric_names
 
     def resolve_options(
@@ -50,6 +68,10 @@ class BotMetricConfigResolver:
                 options[name] = self._resolve_prompt_alignment_options(bot_id)
             elif name == "conversational_g_eval":
                 options[name] = self._resolve_conversational_g_eval_options(bot_id)
+            elif name == "g_eval":
+                options[name] = self._resolve_g_eval_options(bot_id)
+            elif name == "dag":
+                options[name] = self._resolve_dag_options(bot_id)
             elif name == "role_adherence":
                 options[name] = self._resolve_role_adherence_options(bot_id)
             else:
@@ -81,6 +103,17 @@ class BotMetricConfigResolver:
             f"bots.{bot_id}.conversational_geval_criteria", default=""
         )
         return {"criteria": criteria}
+
+    def _resolve_g_eval_options(self, bot_id: str) -> dict[str, object]:
+        criteria = self._config.get_optional(f"bots.{bot_id}.geval_criteria", default="")
+        return {"criteria": criteria}
+
+    def _resolve_dag_options(self, bot_id: str) -> dict[str, object]:
+        dotted_path = self._config.get_optional(f"bots.{bot_id}.dag_builder", default="")
+        module_path, _, attr_name = dotted_path.rpartition(".")
+        module = importlib.import_module(module_path)
+        builder = getattr(module, attr_name)
+        return {"dag": builder()}
 
     def _resolve_role_adherence_options(self, bot_id: str) -> dict[str, object]:
         chatbot_role = self._config.get_optional(f"bots.{bot_id}.chatbot_role", default="")

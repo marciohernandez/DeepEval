@@ -625,6 +625,281 @@ class TestEmptyOrSingleTurnMessagesIsolatesOnlyMultiTurnConversationalMetrics:
         assert result.metrics["bias"].passed is True
 
 
+class TestMalformedGEvalCriteriaIsolatedNotBlocking:
+    async def test_malformed_g_eval_criteria_isolated_not_blocking(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        class _FakeNativeGEval:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeGEvalWrapper:
+            _native_metric_cls = _FakeNativeGEval
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            "g_eval": _FakeGEvalWrapper,
+            "bias": _FakeBiasWrapper,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            if name == "g_eval":
+                instance.measure = AsyncMock(
+                    side_effect=ValueError(
+                        "GEval requires evaluation_params. Provide them at initialization "
+                        "or call pull() before evaluate."
+                    )
+                )
+            else:
+                instance.measure = AsyncMock(
+                    return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+                )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=["g_eval", "bias"]
+        )
+
+        failed = result.metrics["g_eval"]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert result.metrics["bias"].passed is True
+
+
+class TestInvalidDagDefinitionIsolatedNotBlocking:
+    async def test_invalid_dag_definition_isolated_not_blocking(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        class _FakeNativeDag:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeDagWrapper:
+            _native_metric_cls = _FakeNativeDag
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            "dag": _FakeDagWrapper,
+            "bias": _FakeBiasWrapper,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            instance.measure = AsyncMock(
+                return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+            )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+
+        resolver = MagicMock()
+
+        def resolve_options(bot_id, names):
+            name = names[0]
+            if name == "dag":
+                raise ValueError("Cyclic dependency detected in DAG definition")
+            return {name: {}}
+
+        resolver.resolve_options.side_effect = resolve_options
+
+        orchestrator = EvaluationOrchestrator(config=stub_config, resolver=resolver)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=["dag", "bias"]
+        )
+
+        failed = result.metrics["dag"]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert result.metrics["bias"].passed is True
+
+
+class TestRagasMeasureExceptionOrTimeoutIsolatedNotBlocking:
+    @pytest.mark.parametrize("ragas_name", ["ragas_answer_correctness", "ragas_context_recall"])
+    async def test_ragas_measure_exception_isolated_not_blocking(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace, ragas_name
+    ):
+        class _FakeNativeRagas:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeRagasWrapper:
+            _native_metric_cls = _FakeNativeRagas
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            ragas_name: _FakeRagasWrapper,
+            "bias": _FakeBiasWrapper,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            if name == ragas_name:
+                instance.measure = AsyncMock(
+                    side_effect=RuntimeError("ragas metric misconfigured")
+                )
+            else:
+                instance.measure = AsyncMock(
+                    return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+                )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=[ragas_name, "bias"]
+        )
+
+        failed = result.metrics[ragas_name]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert result.metrics["bias"].passed is True
+
+    @pytest.mark.parametrize("ragas_name", ["ragas_answer_correctness", "ragas_context_recall"])
+    async def test_ragas_measure_timeout_isolated_not_blocking(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace, ragas_name
+    ):
+        class _FakeNativeRagas:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeRagasWrapper:
+            _native_metric_cls = _FakeNativeRagas
+
+        class _FakeNativeBias:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        class _FakeBiasWrapper:
+            _native_metric_cls = _FakeNativeBias
+
+        mock_metric_factory._registry = {
+            ragas_name: _FakeRagasWrapper,
+            "bias": _FakeBiasWrapper,
+        }
+
+        values = {
+            "evaluation.metric_timeout_seconds": "30",
+            f"evaluation.metric_timeout_overrides.{ragas_name}": "0.05",
+            "evaluation.llm_judge.provider": "openai",
+            "evaluation.llm_judge.model": "gpt-4o",
+        }
+        stub_config.get_optional.side_effect = lambda key, default="": values.get(key, default)
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            if name == ragas_name:
+                async def slow_measure(context):
+                    await asyncio.sleep(1)
+                    return MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+
+                instance.measure = slow_measure
+            else:
+                instance.measure = AsyncMock(
+                    return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+                )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=[ragas_name, "bias"]
+        )
+
+        failed = result.metrics[ragas_name]
+        assert failed.score is None
+        assert failed.passed is False
+        assert failed.error is not None
+        assert result.metrics["bias"].passed is True
+
+
+class TestAllFourNewMetricsEnabledSimultaneouslyRunIndependently:
+    async def test_all_four_new_metrics_enabled_simultaneously_run_independently(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        class _FakeNative:
+            def __init__(self, threshold: float = 0.5, model=None, async_mode=True):
+                pass
+
+        def _make_wrapper():
+            return type("_FakeWrapper", (), {"_native_metric_cls": _FakeNative})
+
+        mock_metric_factory._registry = {
+            "g_eval": _make_wrapper(),
+            "dag": _make_wrapper(),
+            "ragas_answer_correctness": _make_wrapper(),
+            "ragas_context_recall": _make_wrapper(),
+        }
+
+        outcomes = {
+            "g_eval": ValueError("malformed criteria"),
+            "dag": None,
+            "ragas_answer_correctness": RuntimeError("ragas misconfigured"),
+            "ragas_context_recall": None,
+        }
+
+        def create(name, *, threshold, deepeval_model, **options):
+            instance = MagicMock()
+            outcome = outcomes[name]
+            if outcome is not None:
+                instance.measure = AsyncMock(side_effect=outcome)
+            else:
+                instance.measure = AsyncMock(
+                    return_value=MetricResult(score=0.9, threshold=threshold, passed=True, error=None)
+                )
+            return instance
+
+        mock_metric_factory.create.side_effect = create
+
+        resolver = MagicMock()
+        resolver.resolve_options.side_effect = lambda bot_id, names: {names[0]: {}}
+
+        orchestrator = EvaluationOrchestrator(config=stub_config, resolver=resolver)
+
+        result = await orchestrator.evaluate(
+            trace=trace,
+            bot_id="test_rag_bot",
+            metric_names=list(outcomes.keys()),
+        )
+
+        assert result.metrics["g_eval"].passed is False
+        assert result.metrics["g_eval"].error is not None
+        assert result.metrics["dag"].passed is True
+        assert result.metrics["dag"].error is None
+        assert result.metrics["ragas_answer_correctness"].passed is False
+        assert result.metrics["ragas_answer_correctness"].error is not None
+        assert result.metrics["ragas_context_recall"].passed is True
+        assert result.metrics["ragas_context_recall"].error is None
+        assert result.passed is False
+
+
 class TestUnknownBotIdUsesNativeDefaults:
     async def test_unknown_bot_id_uses_native_defaults(self, orchestrator, trace):
         result = await orchestrator.evaluate(
