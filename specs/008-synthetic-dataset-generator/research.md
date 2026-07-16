@@ -160,3 +160,49 @@ a local HTTP server exercises Flowise request/response parsing; marked integrati
 Supabase Auth/RLS and Qdrant when their environment credentials are present; and a full flow covers
 generation, persistence, and fresh retrieval. Missing service credentials cause an explicit pytest
 skip, not a pass claim. Optional manual checks are diagnostic only.
+
+## Post-implementation gate status (Phase 6, 2026-07-16)
+
+T041-T046 executed exactly as specified in tasks.md/quickstart.md. Results:
+
+- **T041 (focused suite)**: `uv run pytest tests/unit/synthetic tests/unit/repositories/test_dataset_repository.py
+  tests/unit/repositories/test_synthetic_migration.py tests/unit/config/test_synthetic_config.py -v` —
+  156 passed, 0 failed.
+- **T042/T046 (integration suite, `-m integration`)**:
+  - `test_synthetic_document_loaders_integration.py` — 5 passed (real PDF/MD/DOCX + corrupt/missing
+    fixtures, no credentials required).
+  - `test_flowise_bot_invoker_integration.py` — 3 passed (real local HTTP server, no credentials
+    required).
+  - `test_synthetic_storage_integration.py` — 5 skipped. Explicit reason: `DATASET_TEST_ORG_A_ACCESS_TOKEN`
+    / `DATASET_TEST_ORG_B_ACCESS_TOKEN` (real Supabase Auth test-user tokens with trusted
+    `app_metadata.org_id`, plus `migrations/002_synthetic_datasets.sql` applied to that project) are
+    absent in this sandbox. This is recorded here as an **unresolved integration gap**, not
+    substituted with a manual check: same-org access, cross-org denial, child org-inheritance,
+    Qdrant dual-content-type indexing/ranking (SC-005), and failed-index cleanup/retry remain
+    unverified against a live Supabase+Qdrant pair.
+  - `test_synthetic_generation_flow_integration.py` — 3 skipped for the same reason. The primary
+    generate -> persist -> fresh-retrieve -> search -> export flow, the Flowise/LangChain
+    side-by-side equivalence assertion (SC-007), and the bot-failure-survives-export assertion
+    remain unresolved gaps pending that dedicated test environment.
+  - Before accepting the skip, the full generation pipeline (real `ConversationSimulator` +
+    `_FakeJudgeModel` + real `FlowiseBotInvoker` over a local HTTP server) was manually exercised
+    outside pytest and confirmed to produce correct `ending_status`/`bot_error` results, so the
+    skipped assertions are believed correct but remain formally unverified end-to-end against real
+    Supabase/Qdrant.
+- **T043 (coverage)**: `uv run pytest --cov=deepeval_platform --cov-report=term-missing
+  --cov-fail-under=80` — every new/changed M4.1 module reached 100% line coverage after adding
+  targeted tests for previously-uncovered branches (Supabase/Qdrant exception paths, abstract/missing
+  factory targets, zero-scenario/zero-allocation conversation paths, unsupported document extensions,
+  real `LangChainBotInvoker._resolve_chain` resolution, and golden/conversation record-mapping
+  branches in the facade). Total project coverage: 97.94% (gate: >=80%).
+- **T044 (full regression)**: `uv run pytest` — 699 passed, 8 skipped (the T031/T032 gap above), 7
+  failed. The 7 failures are pre-existing and unrelated to this feature (`test_evaluation_repository_integration.py`,
+  `test_llm_factory_integration.py`, `test_qdrant_provider_integration.py`) — confirmed via `git stash`
+  to fail identically against the pre-M4.1 commit, because this sandbox lacks live Anthropic/OpenRouter/
+  Supabase/Qdrant credentials. Zero regressions attributable to M4.1.
+- **T045 (config/security gates)**: no `SYNTHETIC_*` keys in `.env`/`.env.example` (enforced by
+  `test_synthetic_config.py`); no hardcoded credentials in `deepeval_platform/synthetic/` or
+  `dataset_repository.py`; `AuthenticatedPrincipal.__repr__` masks `access_token`; no public method on
+  `SyntheticDatasetGenerator` or `DatasetRepository` accepts `org_id` (verified by signature
+  introspection); every one of the three new tables keeps `org_id` nullable with RLS
+  `SELECT`/`INSERT`/`UPDATE` policies (verified by `test_synthetic_migration.py`, 26/26 green).

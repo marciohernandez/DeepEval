@@ -89,6 +89,18 @@ class TestFailureModes:
         assert turn.content == "[BOT_UNREACHABLE]"
         assert turn.metadata["error"]["code"] == "malformed_response"
 
+    def test_non_dict_json_returns_bot_unreachable(self, mocker):
+        mocker.patch(
+            "deepeval_platform.synthetic.flowise_bot_invoker.httpx.post",
+            return_value=_response(json_data=["not", "a", "dict"]),
+        )
+        invoker = FlowiseBotInvoker(bot_id="test_rag_bot", endpoint_url="https://flowise/api")
+
+        turn = invoker(input="x", turns=[], thread_id="t1")
+
+        assert turn.content == "[BOT_UNREACHABLE]"
+        assert turn.metadata["error"]["code"] == "malformed_response"
+
     def test_missing_text_field_returns_bot_unreachable(self, mocker):
         mocker.patch(
             "deepeval_platform.synthetic.flowise_bot_invoker.httpx.post",

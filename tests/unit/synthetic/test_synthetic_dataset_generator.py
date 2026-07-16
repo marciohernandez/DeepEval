@@ -73,11 +73,11 @@ def _build_facade(
 
     if golden_generator_cls is None:
         golden_generator_cls = MagicMock()
-    golden_generator_instance = golden_generator_cls.return_value
-    golden_generator_instance.generate.return_value = ([], [])
+        golden_generator_cls.return_value.generate.return_value = ([], [])
 
-    conversation_generator_cls = conversation_generator_cls or MagicMock()
-    conversation_generator_cls.return_value.generate.return_value = []
+    if conversation_generator_cls is None:
+        conversation_generator_cls = MagicMock()
+        conversation_generator_cls.return_value.generate.return_value = []
 
     bot_invoker_factory_cls = bot_invoker_factory_cls or MagicMock()
 
@@ -266,3 +266,90 @@ class TestAuthenticatedExportDelegation:
         )
         exporter.export.assert_called_once_with("the-dataset", "irrelevant/output")
         assert result == "the-path"
+
+
+class TestCoverageGaps:
+    """Closes coverage gaps identified by T043 for synthetic_dataset_generator.py."""
+
+    def test_golden_records_are_built_from_generated_goldens(self):
+        golden_generator_cls = MagicMock()
+        golden_a = Golden(input="q1", expected_output="a1", context=["ctx"], source_file="docs/a.md")
+        golden_b = Golden(input="q2", expected_output=None, context=[], source_file="docs/b.md")
+        golden_generator_cls.return_value.generate.return_value = ([golden_a, golden_b], [])
+
+        facade, mocks = _build_facade(golden_generator_cls=golden_generator_cls)
+
+        dataset = facade.generate(access_token="tok", bot_id="test_rag_bot")
+
+        assert len(dataset.goldens) == 2
+        inputs = {golden.input for golden in dataset.goldens}
+        assert inputs == {"q1", "q2"}
+        assert all(golden.persona_name == "frustrated_customer" for golden in dataset.goldens)
+        assert dataset.source_documents == ["docs/a.md", "docs/b.md"]
+
+    def test_conversation_records_are_built_from_generated_conversations(self):
+        persona_resolver = MagicMock()
+        scenario = PersonaScenario(name="refund_request", expected_outcome="Refund processed")
+        persona_resolver.resolve.return_value = [_persona(scenarios=[scenario])]
+
+        conversation_generator_cls = MagicMock()
+        generated = MagicMock()
+        generated.persona_name = "frustrated_customer"
+        generated.scenario_name = "refund_request"
+        generated.turns = [{"role": "user", "content": "hi", "metadata": {}}]
+        generated.ending_status = "expected_outcome_reached"
+        generated.bot_error = None
+        conversation_generator_cls.return_value.generate.return_value = [generated]
+
+        facade, mocks = _build_facade(
+            persona_resolver=persona_resolver,
+            conversation_generator_cls=conversation_generator_cls,
+        )
+
+        dataset = facade.generate(access_token="tok", bot_id="test_rag_bot")
+
+        assert len(dataset.conversations) == 1
+        record = dataset.conversations[0]
+        assert record.persona_name == "frustrated_customer"
+        assert record.scenario_name == "refund_request"
+        assert record.ending_status == "expected_outcome_reached"
+
+    def test_duplicate_document_failures_across_personas_are_deduplicated(self):
+        persona_resolver = MagicMock()
+        persona_resolver.resolve.return_value = [_persona(name="a"), _persona(name="b")]
+
+        from deepeval_platform.repositories.models import DocumentFailure
+
+        shared_failure = DocumentFailure(
+            path="docs/corrupt.pdf",
+            stage="parsing",
+            error_type="PdfReadError",
+            message="could not parse",
+        )
+        golden_generator_cls = MagicMock()
+        golden_generator_cls.return_value.generate.return_value = ([], [shared_failure])
+
+        facade, mocks = _build_facade(
+            persona_resolver=persona_resolver, golden_generator_cls=golden_generator_cls
+        )
+
+        dataset = facade.generate(access_token="tok", bot_id="test_rag_bot")
+
+        assert dataset.document_failures == [shared_failure]
+
+    def test_discover_documents_lists_real_files_in_existing_directory(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "a.md").write_text("a")
+        (docs_dir / "b.md").write_text("b")
+
+        config = _config({"synthetic.docs_dir": str(docs_dir)})
+        facade, mocks = _build_facade(config=config)
+
+        facade.generate(access_token="tok", bot_id="test_rag_bot")
+
+        _, kwargs = mocks["golden_generator_cls"].return_value.generate.call_args
+        assert sorted(kwargs["document_paths"]) == [
+            str(docs_dir / "a.md"),
+            str(docs_dir / "b.md"),
+        ]

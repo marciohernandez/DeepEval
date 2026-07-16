@@ -452,3 +452,161 @@ class TestConversationBotErrorRoundTrip:
 
         assert result.conversations[0].ending_status == "bot_failure"
         assert result.conversations[0].bot_error == bot_error
+
+
+class TestCoverageGaps:
+    """Closes coverage gaps identified by T043 for dataset_repository.py."""
+
+    def test_get_by_id_raises_repository_error_on_supabase_failure(self, qdrant_provider):
+        provider, _ = qdrant_provider
+        dataset_table = MagicMock()
+        dataset_table.select.return_value = dataset_table
+        dataset_table.eq.return_value = dataset_table
+        dataset_table.execute.side_effect = Exception("db unreachable")
+        principal = _principal(tables={"synthetic_datasets": dataset_table})
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        with pytest.raises(RepositoryError):
+            repo.get_by_id(uuid4(), principal=principal)
+
+    def test_get_by_bot_returns_matching_datasets(self, qdrant_provider):
+        provider, _ = qdrant_provider
+        dataset_id = uuid4()
+        dataset_row = {
+            "id": str(dataset_id),
+            "bot_id": "test_rag_bot",
+            "org_id": str(_ORG_ID),
+            "personas": [],
+            "source_documents": [],
+            "document_failures": [],
+            "indexing_status": "indexed",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        dataset_table = _chainable_table(_response([dataset_row]))
+        golden_table = _chainable_table(_response([]))
+        conversation_table = _chainable_table(_response([]))
+        principal = _principal(
+            tables={
+                "synthetic_datasets": dataset_table,
+                "synthetic_goldens": golden_table,
+                "synthetic_conversations": conversation_table,
+            }
+        )
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        results = repo.get_by_bot("test_rag_bot", principal=principal)
+
+        assert len(results) == 1
+        assert results[0].id == dataset_id
+
+    def test_get_by_bot_raises_repository_error_on_supabase_failure(self, qdrant_provider):
+        provider, _ = qdrant_provider
+        dataset_table = MagicMock()
+        dataset_table.select.return_value = dataset_table
+        dataset_table.eq.return_value = dataset_table
+        dataset_table.execute.side_effect = Exception("db unreachable")
+        principal = _principal(tables={"synthetic_datasets": dataset_table})
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        with pytest.raises(RepositoryError):
+            repo.get_by_bot("test_rag_bot", principal=principal)
+
+    def test_search_content_raises_repository_error_on_supabase_failure(self, qdrant_provider):
+        provider, _ = qdrant_provider
+        dataset_table = MagicMock()
+        dataset_table.select.return_value = dataset_table
+        dataset_table.eq.return_value = dataset_table
+        dataset_table.execute.side_effect = Exception("db unreachable")
+        principal = _principal(tables={"synthetic_datasets": dataset_table})
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        with pytest.raises(RepositoryError):
+            repo.search_content("query", principal=principal)
+
+    def test_search_content_excludes_hits_outside_authorized_datasets(self, qdrant_provider):
+        provider, store = qdrant_provider
+        authorized_id = uuid4()
+        unauthorized_id = uuid4()
+        dataset_table = _chainable_table(_response([{"id": str(authorized_id)}]))
+        principal = _principal(tables={"synthetic_datasets": dataset_table})
+
+        authorized_doc = MagicMock()
+        authorized_doc.page_content = "authorized text"
+        authorized_doc.metadata = {
+            "content_type": "golden",
+            "source_record_id": str(uuid4()),
+            "dataset_id": str(authorized_id),
+            "persona_name": "frustrated_customer",
+        }
+        unauthorized_doc = MagicMock()
+        unauthorized_doc.page_content = "unauthorized text"
+        unauthorized_doc.metadata = {
+            "content_type": "golden",
+            "source_record_id": str(uuid4()),
+            "dataset_id": str(unauthorized_id),
+            "persona_name": "frustrated_customer",
+        }
+        store.similarity_search_with_score.return_value = [
+            (authorized_doc, 0.9),
+            (unauthorized_doc, 0.95),
+        ]
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        results = repo.search_content("query", principal=principal, k=5)
+
+        assert len(results) == 1
+        assert results[0].dataset_id == authorized_id
+
+    def test_index_content_with_no_goldens_or_conversations_marks_indexed(self, qdrant_provider):
+        provider, store = qdrant_provider
+        dataset_table = _chainable_table(_response([{"id": "x"}]))
+        principal = _principal(tables={"synthetic_datasets": dataset_table})
+        dataset = _dataset(goldens=[], conversations=[])
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        repo.save(dataset, principal=principal)
+
+        store.add_texts.assert_not_called()
+        update_call = dataset_table.update.call_args.args[0]
+        assert update_call["indexing_status"] == "indexed"
+
+    def test_cleanup_failure_itself_is_swallowed(self, qdrant_provider):
+        provider, store = qdrant_provider
+        store.add_texts.side_effect = Exception("qdrant down")
+        store.client.delete.side_effect = Exception("delete also fails")
+        dataset_table = _chainable_table(_response([{"id": "x"}]))
+        principal = _principal(tables={"synthetic_datasets": dataset_table})
+        dataset = _dataset()
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        # Must not raise even though both the write and the cleanup delete fail.
+        repo.save(dataset, principal=principal)
+
+        update_call = dataset_table.update.call_args.args[0]
+        assert update_call["indexing_status"] == "failed"
+
+    def test_load_aggregate_raises_repository_error_when_child_query_fails(self, qdrant_provider):
+        provider, _ = qdrant_provider
+        dataset_id = uuid4()
+        dataset_row = {
+            "id": str(dataset_id),
+            "bot_id": "test_rag_bot",
+            "org_id": str(_ORG_ID),
+            "personas": [],
+            "source_documents": [],
+            "document_failures": [],
+            "indexing_status": "indexed",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        dataset_table = _chainable_table(_response([dataset_row]))
+        golden_table = MagicMock()
+        golden_table.select.return_value = golden_table
+        golden_table.eq.return_value = golden_table
+        golden_table.execute.side_effect = Exception("child query failed")
+        principal = _principal(
+            tables={"synthetic_datasets": dataset_table, "synthetic_goldens": golden_table}
+        )
+
+        repo = DatasetRepository(qdrant_provider=provider)
+        with pytest.raises(RepositoryError):
+            repo.get_by_id(dataset_id, principal=principal)

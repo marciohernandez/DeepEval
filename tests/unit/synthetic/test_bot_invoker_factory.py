@@ -128,3 +128,16 @@ class TestFailureModes:
 
         with pytest.raises(BotInvokerConfigError):
             BotInvokerFactory.create("no_config", config=config)
+
+    def test_missing_required_invoker_kwarg_fails_clearly(self):
+        config = _config(
+            {
+                "bots.incomplete_bot.invocation.invoker_class": (
+                    "deepeval_platform.synthetic.flowise_bot_invoker.FlowiseBotInvoker"
+                ),
+                # endpoint_url intentionally absent
+            }
+        )
+
+        with pytest.raises(BotInvokerConfigError):
+            BotInvokerFactory.create("incomplete_bot", config=config)

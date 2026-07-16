@@ -94,3 +94,14 @@ class TestInvalidTargets:
         )
         with pytest.raises(DatasetExporterConfigError):
             DatasetExporterFactory.create("broken", config=config)
+
+    def test_abstract_target_fails_clearly(self):
+        config = _config(
+            {
+                "synthetic.exporters.abstract": (
+                    "deepeval_platform.synthetic.dataset_exporter_base.DatasetExporterBase"
+                )
+            }
+        )
+        with pytest.raises(DatasetExporterConfigError):
+            DatasetExporterFactory.create("abstract", config=config)

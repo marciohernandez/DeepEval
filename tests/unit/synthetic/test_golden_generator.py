@@ -356,3 +356,34 @@ class TestStructuredDocumentFailures:
         assert failure.path == str(corrupt_docx)
         assert failure.stage == "parsing"
         assert failure.message  # sanitized diagnostic present
+
+    def test_unsupported_extension_is_parsing_failure(self, tmp_path, mock_synthesizer):
+        synthesizer_cls, instances = mock_synthesizer
+        valid_path = _make_text_file(tmp_path, "valid.txt")
+        unsupported_path = tmp_path / "unsupported.xyz"
+        unsupported_path.write_text("some content")
+
+        def make_instance(*, model, styling_config):
+            instance = MagicMock()
+            instance.generate_goldens_from_docs.side_effect = (
+                lambda document_paths, max_goldens_per_context: _fake_goldens(
+                    document_paths[0], max_goldens_per_context
+                )
+            )
+            instances.append(instance)
+            return instance
+
+        synthesizer_cls.side_effect = make_instance
+
+        generator = GoldenGenerator(judge_model=MagicMock())
+        goldens, failures = generator.generate(
+            persona=_persona(),
+            document_paths=[valid_path, str(unsupported_path)],
+            goldens_per_persona=2,
+        )
+
+        assert len(failures) == 1
+        failure = failures[0]
+        assert failure.path == str(unsupported_path)
+        assert failure.stage == "parsing"
+        assert failure.error_type == "ValueError"

@@ -164,3 +164,32 @@ class TestTokenSecrecy:
 
         assert "super-secret-access-token" not in repr(principal)
         assert "super-secret-access-token" not in str(principal)
+
+
+class TestCoverageGaps:
+    """Closes coverage gaps identified by T043 for authorization.py."""
+
+    def test_non_uuid_user_id_raises(self, mocker):
+        client = MagicMock()
+        client.auth.get_user.return_value = _user_response(user_id="not-a-uuid")
+        mocker.patch(
+            "deepeval_platform.synthetic.authorization.create_client",
+            return_value=client,
+        )
+
+        authorizer = OrganizationAuthorizer(config=_config())
+        with pytest.raises(AuthorizationError):
+            authorizer.authorize("bad-user-id-token")
+
+    def test_postgrest_scoping_failure_raises(self, mocker):
+        client = MagicMock()
+        client.auth.get_user.return_value = _user_response()
+        client.postgrest.auth.side_effect = Exception("cannot scope client")
+        mocker.patch(
+            "deepeval_platform.synthetic.authorization.create_client",
+            return_value=client,
+        )
+
+        authorizer = OrganizationAuthorizer(config=_config())
+        with pytest.raises(AuthorizationError):
+            authorizer.authorize("valid-access-token")

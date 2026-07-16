@@ -238,3 +238,56 @@ class TestContinuationAfterOneScenarioFailure:
         assert call_order == ["failing_scenario", "ok_scenario"]
         assert len(records) == 1
         assert records[0].scenario_name == "ok_scenario"
+
+
+class TestCoverageGaps:
+    """Closes coverage gaps identified by T043 for conversation_generator.py."""
+
+    def test_persona_without_scenarios_returns_empty_list(self, mock_simulator):
+        simulator_cls, _ = mock_simulator
+        generator = ConversationGenerator(judge_model=MagicMock(), invoker=MagicMock())
+
+        records = generator.generate(
+            persona=_persona([]), conversations_per_persona=5, max_turns=5
+        )
+
+        assert records == []
+        simulator_cls.assert_not_called()
+
+    def test_zero_allocation_scenario_is_skipped(self, mock_simulator):
+        simulator_cls, instances = mock_simulator
+        scenarios = [
+            PersonaScenario(name="first", expected_outcome="A"),
+            PersonaScenario(name="second", expected_outcome="B"),
+            PersonaScenario(name="third", expected_outcome="C"),
+        ]
+        called_scenarios = []
+
+        def make_instance(*, model_callback, simulator_model):
+            instance = MagicMock()
+
+            def simulate(conversational_goldens, max_user_simulations):
+                called_scenarios.append(conversational_goldens[0].scenario)
+                return [
+                    _test_case(
+                        _turns(("user", "hi"), ("assistant", "hello")),
+                        scenario=g.scenario,
+                        expected_outcome=g.expected_outcome,
+                    )
+                    for g in conversational_goldens
+                ]
+
+            instance.simulate.side_effect = simulate
+            instances.append(instance)
+            return instance
+
+        simulator_cls.side_effect = make_instance
+
+        generator = ConversationGenerator(judge_model=MagicMock(), invoker=MagicMock())
+        # divmod(1, 3) = (0, 1): only the first scenario gets an allocation of 1.
+        records = generator.generate(
+            persona=_persona(scenarios), conversations_per_persona=1, max_turns=5
+        )
+
+        assert called_scenarios == ["first"]
+        assert len(records) == 1

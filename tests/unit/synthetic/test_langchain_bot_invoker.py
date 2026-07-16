@@ -154,6 +154,29 @@ class TestStructuredFailures:
         assert turn.content == "[BOT_UNREACHABLE]"
 
 
+class TestRealChainResolution:
+    def test_real_dotted_path_resolves_and_invokes(self):
+        """Exercises the real _resolve_chain implementation (no mocking of it)."""
+        invoker = LangChainBotInvoker(
+            bot_id="test_agent_bot",
+            chain_target="tests.unit.synthetic._fixtures.fake_chain_module.chain",
+        )
+
+        turn = invoker(input="How do I reset my password?", turns=[], thread_id="t1")
+
+        assert turn.content == "resolved chain answer for: How do I reset my password?"
+
+    def test_real_resolution_failure_returns_bot_unreachable(self):
+        invoker = LangChainBotInvoker(
+            bot_id="test_agent_bot", chain_target="does.not.exist.chain"
+        )
+
+        turn = invoker(input="hi", turns=[], thread_id="t1")
+
+        assert turn.content == "[BOT_UNREACHABLE]"
+        assert turn.metadata["error"]["code"] == "resolution_error"
+
+
 class TestNativeInvokeUsed:
     def test_invoke_called_with_plain_string_input(self, mocker):
         chain = MagicMock()

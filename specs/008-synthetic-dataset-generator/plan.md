@@ -99,6 +99,31 @@ settings/persona/bot configuration updates. Counts exclude exceptions and DeepEv
 No design-pattern exception is requested. Constitution v1.4.0 is in force. All principle checks
 pass; no implementation blocker remains.
 
+## Final Gate Status (Phase 6, T041-T047, 2026-07-16)
+
+All 47 tasks (T001-T047) are complete. Full detail, including exact commands and pass/fail/skip
+counts, is recorded in research.md "Post-implementation gate status". Summary:
+
+| Principle/Gate | Status | Evidence |
+|---|---|---|
+| I. OOP-First | PASS | 14 single-responsibility classes across `synthetic/` and `repositories/`; ABCs (`BotInvokerBase`, `DatasetExporterBase`) enforce polymorphic extension. |
+| II. DeepEval-First | PASS | Native `Synthesizer`, `StylingConfig`, `ConversationSimulator`, `ConversationalGolden`, `Turn` used throughout; no reimplementation of DeepEval scoring/generation logic. |
+| III. LangChain-First | PASS | `LangChainBotInvoker` uses native `.invoke()`/`BaseMessage.content` per the MCP-verified contract in research.md R6; document loaders are the native `langchain_community` classes. |
+| IV. TDD | PASS | Every task's test file was written and observed RED before its production module; T041 focused suite 156/156 green; T043 coverage 100% on every new/changed module (97.94% project-wide, gate >=80%). |
+| V. Zero Hardcode | PASS | `test_synthetic_config.py` proves no `SYNTHETIC_*` env keys exist and `.env.example` carries only `SUPABASE_ANON_KEY=`; grep for hardcoded credentials in `synthetic/` and `dataset_repository.py` is empty (T045). |
+| VI. Extensibility | PASS | `BotInvokerFactory`/`DatasetExporterFactory` are dotted-class, registry-free; a custom test subclass loaded solely from config in both factories' test suites with zero factory edits. |
+| Org-id readiness & migration compliance | PASS | `migrations/002_synthetic_datasets.sql` versioned; all 3 tables nullable `org_id`; child-row inheritance trigger rejects mismatches; RLS `SELECT`/`INSERT`/`UPDATE` policies with `WITH CHECK` (26/26 green in `test_synthetic_migration.py`). |
+| Authentication and RLS | PASS (unit) / **UNRESOLVED (integration)** | Every public facade/repository method authenticates first and accepts no caller-supplied `org_id` (verified by signature introspection, T045). Live Supabase Auth/RLS same-org/cross-org/child-inheritance behavior is NOT verified end-to-end in this environment — `test_synthetic_storage_integration.py` and `test_synthetic_generation_flow_integration.py` (8 tests total) skip explicitly for missing `DATASET_TEST_ORG_A_ACCESS_TOKEN`/`DATASET_TEST_ORG_B_ACCESS_TOKEN`. This is recorded as an open gap requiring a dedicated Supabase/Qdrant test environment, not silently accepted as passing. |
+| Regression safety | PASS | T044 full-suite run: 699 passed, 8 skipped (the gap above), 7 pre-existing failures unrelated to M4.1 (confirmed via `git stash` to fail identically before this feature; they require live Anthropic/OpenRouter/Supabase/Qdrant credentials absent from this sandbox). |
+
+**Completion caveat**: this feature is functionally complete and all automatable gates pass, but the
+Supabase Auth/RLS and full-flow integration suites have never executed against real infrastructure.
+Before production sign-off, provision the dedicated test environment (`SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, two test users with distinct `app_metadata.org_id`,
+`migrations/002_synthetic_datasets.sql` applied, real Qdrant) and re-run
+`test_synthetic_storage_integration.py` and `test_synthetic_generation_flow_integration.py` with
+`-m integration`.
+
 ## Project Structure
 
 ```text
