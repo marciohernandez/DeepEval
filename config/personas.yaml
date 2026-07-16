@@ -1,0 +1,21 @@
+personas:
+  frustrated_customer:
+    profile: "A customer whose order is significantly delayed and wants a resolution now"
+    styling_scenario: "Speaking with visible frustration about a delayed order"
+    task: "Resolve the delayed order and restore customer confidence"
+    input_format: "Short, impatient chat messages"
+    expected_output_format: "Empathetic, concise, and action-oriented replies"
+    scenarios:
+      - name: refund_request
+        expected_outcome: "The bot processes or clearly explains the refund"
+      - name: escalation
+        expected_outcome: "The bot escalates the conversation to a human agent"
+  curious_new_user:
+    profile: "A first-time user exploring what the product can do"
+    styling_scenario: "Asking open-ended, exploratory questions"
+    task: "Understand the product's core capabilities"
+    input_format: "Casual, broad questions"
+    expected_output_format: "Clear, welcoming explanations with examples"
+    scenarios:
+      - name: feature_discovery
+        expected_outcome: "The bot describes at least one relevant feature clearly"

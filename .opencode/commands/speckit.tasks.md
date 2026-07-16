@@ -138,7 +138,9 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 **CRITICAL**: Tasks MUST be organized by user story to enable independent implementation and testing.
 
-**Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the feature specification or if user requests TDD approach.
+**Tests are MANDATORY**: Constitution Principle IV requires RED-before-GREEN unit tests per
+class/module and automated integration tests for every primary flow. Generate test tasks before
+their corresponding production tasks and make the dependency explicit.
 
 ### Checklist Format (REQUIRED)
 

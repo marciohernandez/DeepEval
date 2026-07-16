@@ -21,3 +21,13 @@ evaluation:
   llm_judge:
     provider: openai
     model: gpt-4o
+
+synthetic:
+  docs_dir: "data/synthetic/docs"
+  output_dir: "data/synthetic/output"
+  goldens_per_persona: 10
+  conversations_per_persona: 6
+  max_conversation_turns: 15
+  exporters:
+    json: "deepeval_platform.synthetic.json_dataset_exporter.JsonDatasetExporter"
+    csv: "deepeval_platform.synthetic.csv_dataset_exporter.CsvDatasetExporter"

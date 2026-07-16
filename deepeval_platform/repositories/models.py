@@ -1,9 +1,24 @@
-"""Domain models for repository layer (US5, US6)."""
+"""Domain models for repository layer (US5, US6, M4.1)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
+
+
+@dataclass
+class DocumentFailure:
+    """Structured unreadable/parser-invalid document failure (M4.1 data-model.md).
+
+    stage distinguishes a file the loader could not open ("readability") from
+    one it opened but could not parse ("parsing").
+    """
+
+    path: str
+    stage: Literal["readability", "parsing"]
+    error_type: str
+    message: str
 
 
 @dataclass
@@ -45,3 +60,68 @@ class EvaluationResult:
     metadata: dict
     org_id: UUID | None
     created_at: datetime
+
+
+ConversationEndingStatus = Literal[
+    "expected_outcome_reached", "natural_conclusion", "max_turn_incomplete", "bot_failure"
+]
+
+
+@dataclass
+class GoldenRecord:
+    """Persisted single-turn golden (M4.1 data-model.md)."""
+
+    id: UUID
+    dataset_id: UUID
+    org_id: UUID | None
+    persona_name: str
+    input: str
+    expected_output: str | None
+    context: list[str]
+    source_file: str
+
+
+@dataclass
+class ConversationRecord:
+    """Persisted multi-turn conversation (M4.1 data-model.md).
+
+    bot_error is populated only when ending_status is "bot_failure".
+    """
+
+    id: UUID
+    dataset_id: UUID
+    org_id: UUID | None
+    persona_name: str
+    scenario_name: str
+    turns: list[dict]
+    ending_status: ConversationEndingStatus
+    bot_error: dict | None
+
+
+@dataclass
+class SyntheticDataset:
+    """Aggregate root for one generation run (M4.1 data-model.md)."""
+
+    id: UUID
+    bot_id: str
+    org_id: UUID | None
+    personas: list[str]
+    source_documents: list[str]
+    document_failures: list[DocumentFailure]
+    indexing_status: Literal["pending", "indexed", "failed"]
+    created_at: datetime
+    goldens: list[GoldenRecord]
+    conversations: list[ConversationRecord]
+
+
+@dataclass
+class SearchResult:
+    """Normalized semantic search hit spanning goldens and conversations."""
+
+    content_type: Literal["golden", "conversation"]
+    source_record_id: UUID
+    dataset_id: UUID
+    persona_name: str
+    text: str
+    score: float
+    metadata: dict

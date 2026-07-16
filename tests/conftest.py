@@ -10,6 +10,7 @@ _STUB_ENV = {
     "QDRANT_API_KEY": "test-qdrant-api-key",
     "SUPABASE_URL": "https://test.supabase.co",
     "SUPABASE_SERVICE_KEY": "test-supabase-service-key",
+    "SUPABASE_ANON_KEY": "test-supabase-anon-key",
     "DATABASE_URL": "postgresql://postgres:test@localhost:5432/postgres",
     "OPENAI_API_KEY": "test-openai-api-key",
     "ANTHROPIC_API_KEY": "test-anthropic-api-key",

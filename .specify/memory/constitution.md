@@ -1,55 +1,38 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.2.1 → 1.3.0
-Bump type: MINOR (Technology Stack substitutions — Qdrant vector-store dependency and Langfuse
-  SDK version/API brought into sync with what tech_stack.md had already documented as
-  implemented and validated in M1; per the Technology Stack section's own governance rule,
-  substitutions require a MINOR bump minimum)
+Version change: 1.3.0 -> 1.4.0
+Bump type: MINOR (the approved technology stack is expanded for DeepEval-native document
+generation and authenticated Supabase access)
 
-Added sections: N/A
+Added sections:
+  - Technology Stack -> Synthetic document support: pypdf, docx2txt, and chromadb are approved
+    runtime dependencies required by DeepEval's native document generation pipeline.
+  - Persistence credential guidance now includes the Supabase anonymous key for user-scoped,
+    RLS-enforced access.
 
 Modified sections:
-  - Technology Stack → Persistence (Vector): was `Qdrant ^1.18.0 client`, implying `qdrant-client`
-    as a direct dependency. Corrected to `langchain-qdrant>=1.1.0` as the direct dependency
-    (`langchain_qdrant.QdrantVectorStore`, wrapped by `QdrantVectorStoreProvider`), with
-    `qdrant-client` transitive only — matching tech_stack.md §2.7 ("Confirmado no M1") and the
-    `langchain_qdrant.QdrantVectorStore` example already present in Principle III's own text
-    (line 118). This is a Principle III (LangChain-First) infrastructure decision, not an
-    evaluation-domain one — DeepEval has no native vector-store abstraction to prefer instead
-    (tech_stack.md §2.7 records that check explicitly).
-  - Technology Stack → Observability: Langfuse Python SDK bumped `^4.9.1` → `>=4.13.0`, with a
-    new breaking-change note that `trace()` was removed in v4.x in favor of
-    `api.ingestion.batch()` + `TraceBody` — matching tech_stack.md §2.3 ("Correção pós-M1").
-  - Principle VI → Design Patterns table: Singleton row updated `QdrantClient` →
-    `QdrantVectorStoreProvider`, matching the class that actually exists post-M1 (wraps
-    `langchain_qdrant.QdrantVectorStore`).
+  - Principle IV / task generation: the shared tasks template now treats TDD and integration
+    tests as mandatory rather than optional.
+  - Quality Gates: authenticated persistence must use a user-scoped Supabase session and RLS;
+    caller-provided organization identifiers alone are not authorization.
 
 Removed sections: N/A
 
-Rationale: same governance-drift pattern already identified and fixed once for LLM Providers
-(v1.2.0) — tech_stack.md had documented these two substitutions as implemented and validated in
-M1, but the constitution's binding Technology Stack section was never amended to match, leaving
-it silently contradicting the shipped code. This amendment closes both gaps in the same pass.
-**DeepEval remains this project's primary framework (Principle II) throughout** — neither change
-touches that precedence; both are corrections scoped to Principle III (LangChain-First, the
-bot-orchestration/integration layer) and observability tooling, not the evaluation domain.
-
 Templates reviewed:
-  ✅ .specify/templates/plan-template.md — no structural changes required.
-  ✅ .specify/templates/spec-template.md — no changes required.
-  ⚠  .specify/templates/tasks-template.md — Still marks tests as "OPTIONAL - only if explicitly
-     requested," which Principle IV (TDD — NON-NEGOTIABLE) overrides. Carried over from v1.0.1;
-     still unresolved.
+  - UPDATED: .specify/templates/tasks-template.md
+  - UPDATED: .agents/skills/speckit-tasks/SKILL.md
+  - UPDATED: .claude/skills/speckit-tasks/SKILL.md
+  - UPDATED: .opencode/commands/speckit.tasks.md
+  - UPDATED: .github/agents/speckit.tasks.agent.md
+  - UPDATED: briefing.md
+  - UPDATED: tech_stack.md
+  - OK: .specify/templates/plan-template.md
+  - OK: .specify/templates/spec-template.md
 
 Follow-up TODOs:
-  - TODO(TASKS_TEMPLATE): Update tasks-template.md note to reflect that TDD is NON-NEGOTIABLE
-    for this project; tests are never optional here. (Carried over, still open.)
-  - TODO(TOKEN_USAGE): `LLMProviderBase._to_token_usage()` reports `TokenUsage(0, 0)` whenever
-    DeepEval's own `calculate_cost()` can't price a call — latent for OpenAI/Anthropic on any
-    model absent from DeepEval's static pricing tables (project defaults `gpt-4o` /
-    `claude-sonnet-4-6` are both listed, so dormant today). Still open; revisit if a custom/
-    unlisted model is ever configured. (OpenRouter case fixed in v1.2.1.)
+  - TODO(TOKEN_USAGE): LLMProviderBase._to_token_usage() still reports TokenUsage(0, 0) when
+    DeepEval cannot price an unlisted model; revisit when an unlisted model is configured.
 -->
 
 # DeepEval Chatbot Evaluator Constitution
@@ -203,6 +186,11 @@ alternatives — they occupy different layers and are never a choice between one
 **Evaluation framework (PRIMARY)**: DeepEval `^4.0.6` — all metrics, Synthesizer,
 ConversationSimulator, PromptOptimizer (GEPA / MIPROv2)
 
+**Synthetic document support**: `pypdf`, `docx2txt`, and `chromadb` — runtime dependencies used
+by DeepEval's native PDF/DOCX loaders and context-construction pipeline. Project code MUST continue
+to delegate document loading and synthetic generation to DeepEval rather than reimplementing these
+capabilities.
+
 **Observability**: Langfuse Python SDK `>=4.13.0` (server: self-hosted on VPS)
 - Flowise bots: traces arrive automatically via native Langfuse integration (read-only)
 - LangChain/LangGraph bots: `langfuse.callback.CallbackHandler` for controlled trace structure
@@ -217,6 +205,9 @@ LangGraph `^1.2.6`, Flowise (self-hosted)
 
 **Persistence**:
 - Relational V1: Supabase cloud (Postgres + Auth + RLS) via `supabase>=2.0.0`
+- Authenticated Supabase operations MUST use the anonymous project key plus a validated user access
+  token so RLS executes in the caller's identity. Service-role credentials MUST NOT be used for
+  user-scoped reads, searches, exports, or generation persistence.
 - Relational V2+: PostgreSQL self-hosted on VPS (swapped via Repository pattern + `DB_PROVIDER`)
 - Vector: `langchain-qdrant>=1.1.0` (server: self-hosted on VPS, API key required) — the native
   LangChain integration (`langchain_qdrant.QdrantVectorStore`) is the direct dependency per
@@ -249,9 +240,13 @@ pytest-mock `^3.14.0`
 
 **Containerization**: Docker + Docker Compose (app + Langfuse + Qdrant for local dev)
 
-**Multi-tenant strategy**: V1 is single-tenant (one organisation). Every database table MUST
-include an `org_id` nullable column from day one to enable V2 multi-tenant activation without
-schema migration. `user_id` MUST NEVER be used as a global-scope identifier.
+**Multi-tenant strategy**: V1's production deployment topology serves a single organisation, but
+the data and access-control layer MUST be built multi-tenant-ready from day one — this is a
+deployment-scale statement, not an exemption from org-scoped enforcement. Every database table
+MUST include an `org_id` nullable column from day one to enable V2 multi-tenant activation without
+schema migration. `user_id` MUST NEVER be used as a global-scope identifier. Org-id enforcement
+(Gate 9: JWT-derived `org_id`, user-scoped RLS, rejection of caller-supplied `org_id`) applies
+regardless of how many organisations are actually deployed.
 
 ## Quality Gates
 
@@ -278,6 +273,9 @@ Every feature MUST pass all applicable gates before being considered complete:
    versioned SQL migration file in `migrations/` (e.g., `001_evaluation_results.sql`); no schema
    may be applied via manual editor operations — manual steps are untrackable, unreproducible in
    CI, and violate the TDD commit-history requirement of Gate 1.
+9. **Authentication and RLS** — User-scoped persistence flows MUST validate the Supabase Auth
+   access token, derive `org_id` from trusted identity claims, and execute through a user-scoped
+   client subject to RLS. Accepting an arbitrary caller-provided `org_id` is not authorization.
 
 **Success criteria** (from briefing §7):
 - Any bot declared in `bots.yaml` evaluates without additional code
@@ -308,4 +306,4 @@ reference to the violated principle and why no simpler path exists.
 
 **Runtime guidance**: See `CLAUDE.md` for agent-specific runtime instructions.
 
-**Version**: 1.3.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-09
+**Version**: 1.4.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-15

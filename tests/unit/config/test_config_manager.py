@@ -269,3 +269,43 @@ class TestGetTyped:
         cfg = ConfigManager.instance()
         with pytest.raises(ConfigError):
             cfg.get_typed("BAD_PORT", int)
+
+
+class TestListSubkeys:
+    def test_returns_immediate_child_segments_under_prefix(self, tmp_path, monkeypatch):
+        _make_env(tmp_path, "")
+        _make_settings(
+            tmp_path,
+            "personas:\n"
+            "  happy_customer:\n"
+            "    profile: cheerful\n"
+            "  frustrated_customer:\n"
+            "    profile: annoyed\n",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        cfg = ConfigManager.instance()
+        assert cfg.list_subkeys("personas") == ["frustrated_customer", "happy_customer"]
+
+    def test_returns_empty_list_when_prefix_absent(self, tmp_path, monkeypatch):
+        _make_env(tmp_path, "")
+        _make_settings(tmp_path, "{}")
+        monkeypatch.chdir(tmp_path)
+
+        cfg = ConfigManager.instance()
+        assert cfg.list_subkeys("personas") == []
+
+    def test_ignores_deeper_nested_segments(self, tmp_path, monkeypatch):
+        _make_env(tmp_path, "")
+        _make_settings(
+            tmp_path,
+            "personas:\n"
+            "  happy_customer:\n"
+            "    scenarios:\n"
+            "      - name: a\n"
+            "      - name: b\n",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        cfg = ConfigManager.instance()
+        assert cfg.list_subkeys("personas") == ["happy_customer"]
