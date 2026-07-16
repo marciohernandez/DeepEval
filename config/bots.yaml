@@ -3,6 +3,9 @@ bots:
     bot_type: rag
     platform: flowise
     geval_criteria: "Response must stay formal and never promise a delivery date"
+    invocation:
+      invoker_class: "deepeval_platform.synthetic.flowise_bot_invoker.FlowiseBotInvoker"
+      endpoint_url: "https://flowise.internal/api/v1/prediction/test-rag-bot"
     metrics:
       faithfulness:
         threshold: 0.8
@@ -20,6 +23,9 @@ bots:
   test_agent_bot:
     bot_type: agent
     platform: langchain
+    invocation:
+      invoker_class: "deepeval_platform.synthetic.langchain_bot_invoker.LangChainBotInvoker"
+      chain_target: "my_bots.agent_bot.graph"
     prompt_instructions:
       - "Always respond in JSON"
       - "Never mention competitors"
