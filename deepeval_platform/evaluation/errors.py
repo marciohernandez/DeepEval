@@ -100,6 +100,57 @@ class ConfigResolutionError(EvaluationOrchestratorError):
         self.__cause__ = original
 
 
+class UnknownBotError(EvaluationOrchestratorError):
+    """Raised when bot_id has no configured `bots.{bot_id}.bot_type` entry (research.md R4)."""
+
+    def __init__(self, bot_id: str) -> None:
+        self.bot_id = bot_id
+        super().__init__(f"Unknown bot_id '{bot_id}': not configured in bots.yaml.")
+
+
+class InvalidPeriodError(EvaluationOrchestratorError):
+    """Raised when period_end is not strictly later than period_start (FR-002)."""
+
+    def __init__(self, period_start: object, period_end: object) -> None:
+        self.period_start = period_start
+        self.period_end = period_end
+        start_display = getattr(period_start, "isoformat", lambda: repr(period_start))()
+        end_display = getattr(period_end, "isoformat", lambda: repr(period_end))()
+        super().__init__(
+            "period_end must be strictly later than period_start: "
+            f"period_start={start_display}, period_end={end_display}."
+        )
+
+
+class DuplicateMetricError(EvaluationOrchestratorError):
+    """Raised when EvaluationConfig.metric_thresholds contains repeated metric names (FR-015)."""
+
+    def __init__(self, duplicates: Iterable[str]) -> None:
+        self.duplicates = list(duplicates)
+        duplicates_str = ", ".join(f"'{n}'" for n in self.duplicates)
+        super().__init__(f"Duplicate metric name(s) in metric_thresholds: {duplicates_str}.")
+
+
+class InvalidRetryStateError(EvaluationOrchestratorError):
+    """Raised when retry_delivery() is called on a run that is not DELIVERY_FAILED (FR-007)."""
+
+    def __init__(self, run_id: object, status: object) -> None:
+        self.run_id = run_id
+        self.status = status
+        super().__init__(
+            f"Cannot retry delivery for run '{run_id}': status is {status!r}, "
+            "expected DELIVERY_FAILED."
+        )
+
+
+class RetryInProgressError(EvaluationOrchestratorError):
+    """Raised when a second retry_delivery() call arrives while one is already in flight (FR-007)."""
+
+    def __init__(self, run_id: object) -> None:
+        self.run_id = run_id
+        super().__init__(f"A delivery retry is already in progress for run '{run_id}'.")
+
+
 def sanitize_error(exc: BaseException) -> ErrorDetail:
     """Redact API-key-shaped tokens / Bearer headers / long opaque strings and cap length."""
     category = type(exc).__name__

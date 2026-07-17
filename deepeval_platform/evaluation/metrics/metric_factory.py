@@ -23,6 +23,10 @@ class MetricFactory:
         return decorator
 
     @classmethod
+    def is_registered(cls, name: str) -> bool:
+        return name in cls._registry
+
+    @classmethod
     def create(
         cls, name: str, *, threshold: float, deepeval_model: DeepEvalBaseLLM, **options: object
     ) -> MetricBase:

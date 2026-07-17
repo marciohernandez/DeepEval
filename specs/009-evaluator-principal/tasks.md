@@ -39,7 +39,7 @@ Single project (existing `deepeval_platform/` package):
 `tests/unit/evaluation/`/`tests/integration/` already exist (M3.1/M4.1). This phase only confirms
 the ground is ready.
 
-- [ ] T001 Confirm `uv run pytest tests/unit/evaluation/test_evaluation_orchestrator.py -v` passes
+- [X] T001 Confirm `uv run pytest tests/unit/evaluation/test_evaluation_orchestrator.py -v` passes
        on the current branch before any new code is added (establishes the relevant pre-change
        baseline); T040 verifies the coverage gate after feature implementation
 
@@ -55,17 +55,17 @@ they exist.
 
 **⚠️ CRITICAL**: Must complete before any user story work begins.
 
-- [ ] T002 [P] Add failing unit tests for `UnknownBotError`, `InvalidPeriodError`,
+- [X] T002 [P] Add failing unit tests for `UnknownBotError`, `InvalidPeriodError`,
       `InvalidRetryStateError`, `RetryInProgressError`, and `DuplicateMetricError` (message/attribute shape, per research.md R4
       and data-model.md) in `tests/unit/evaluation/test_errors.py` — run and observe RED
-- [ ] T003 Add `UnknownBotError`, `InvalidPeriodError`, `InvalidRetryStateError`,
+- [X] T003 Add `UnknownBotError`, `InvalidPeriodError`, `InvalidRetryStateError`,
       `RetryInProgressError`, and `DuplicateMetricError` to `deepeval_platform/evaluation/errors.py`, following the file's
       existing `EvaluationOrchestratorError` subclass convention (each carries every diagnostic
       field a caller needs, per research.md R4/R6) — GREEN for T002 (depends on T002)
-- [ ] T049 [P] Add failing unit tests for the public `MetricFactory.is_registered(name)` query in
+- [X] T049 [P] Add failing unit tests for the public `MetricFactory.is_registered(name)` query in
       `tests/unit/evaluation/metrics/test_metric_factory.py`: registered names return `True`, unknown names
       return `False`, and callers do not need access to `_registry` — run and observe RED
-- [ ] T050 Implement `MetricFactory.is_registered(name)` in
+- [X] T050 Implement `MetricFactory.is_registered(name)` in
       `deepeval_platform/evaluation/metrics/metric_factory.py` as the public registry-membership
       query — GREEN for T049 (depends on T049)
 
