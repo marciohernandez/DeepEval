@@ -1,49 +1,109 @@
 # Phase 0 Research: Evaluator Principal (M4.2)
 
 Every "unknown" below is resolved against the existing codebase (M2.1 collection, M2.2
-normalization, M3.1 metric evaluation, M4.1 synthetic/persistence conventions) rather than
-external libraries — this milestone composes already-specified capabilities per the spec's
-Assumptions section. No DeepEval/LangChain native class is a candidate for the orchestration
-logic itself (Principle II/III scope boundary: `Evaluator` is a project-local orchestration
-abstraction, like `TraceExtractor`/`EvaluationStrategy`, not a DeepEval metric/dataset/model).
+normalization, M3.1 metric evaluation, M4.1 synthetic/persistence conventions) and the current
+DeepEval API review recorded below. This milestone composes already-specified capabilities per the
+spec's Assumptions section; it does not reimplement DeepEval metric scoring.
+
+## DeepEval-first native capability review
+
+**Reviewed**: 2026-07-17 against the official DeepEval documentation and the repository's installed
+DeepEval 4.0.7 API (`pyproject.toml` requires `deepeval>=4.0.6`). Sources consulted:
+
+- [DeepEval evaluation introduction](https://github.com/confident-ai/deepeval/blob/main/docs/content/docs/evaluation-introduction.mdx):
+  `evaluate(test_cases, metrics, ...)` as the programmatic batch evaluation entry point, returning
+  `deepeval.evaluate.types.EvaluationResult`.
+- [DeepEval API reference](https://github.com/confident-ai/deepeval/blob/main/docs/public/llms-full.txt):
+  `AsyncConfig(run_async, throttle_value, max_concurrent)`,
+  `ErrorConfig(ignore_errors, skip_on_missing_params)`, and `DisplayConfig`.
+- [DeepEval manual agent instrumentation](https://github.com/confident-ai/deepeval/blob/main/docs/snippets/evaluation/cicd-agent-framework-tabs.mdx):
+  `@observe`, `EvaluationDataset.evals_iterator`, and `assert_test` for traced application or CI
+  evaluation flows.
+
+**Native capabilities that MUST continue to be reused**:
+
+- DeepEval metric implementations and their native `a_measure()` methods remain the scoring engine
+  behind the existing M3.1 `MetricBase` adapters and `EvaluationOrchestrator`.
+- Native metric thresholds remain constructor-level metric configuration; the project's per-run
+  threshold override is supplied when `MetricFactory` constructs those native metrics.
+- `evaluate()` can evaluate a completed collection of `LLMTestCase` or
+  `ConversationalTestCase` values concurrently. `AsyncConfig` controls test-case/metric
+  concurrency, `ErrorConfig` controls metric/test error handling, and the call returns a native
+  result aggregate after evaluation finishes.
+
+**Why the native batch API does not satisfy the M4.2 Evaluator contract as-is**:
+
+- It does not extract project `TraceRecord` values from Langfuse or normalize them through the
+  existing `TraceNormalizer`; it starts from already-built DeepEval test cases.
+- `evaluate()` is a completing call that returns its result aggregate after evaluation; it does
+  not return this feature's immediately-queryable `EvaluationRun` handle and does not expose this
+  feature's processed/total counts or first-terminal `wait(timeout)` contract.
+- `AsyncConfig` configures internal concurrency but does not provide the required run lifecycle or
+  stage-level progress API. `DisplayConfig` provides presentation, not queryable domain state.
+- `ErrorConfig(ignore_errors=True)` can isolate evaluation errors, but it does not model this
+  feature's extraction-, normalization-, and evaluation-stage `PerTraceError` contract or its
+  distinction between `UNABLE_TO_RUN`, `COMPLETED_WITH_FAILURES`, and `DELIVERY_FAILED`.
+- The native result aggregate does not publish to a requester-supplied `ResultObserver`, retain the
+  project's per-trace result mapping for inspection, or retry only a failed delivery without
+  reevaluating test cases.
+
+**Decision**: Keep `Evaluator` as a project-local integration/orchestration abstraction over the
+already-DeepEval-backed M3.1 `EvaluationOrchestrator`. Its custom responsibility is limited to the
+M4.2 lifecycle missing from DeepEval's batch API: extraction, normalization sequencing, live run
+state, stage-aware failure routing, and observer delivery/retry. `Evaluator` MUST delegate scoring
+to `EvaluationOrchestrator` and MUST NOT reproduce native metric measurement logic. Direct use of
+DeepEval `evaluate()` was considered and rejected for this layer because adapting its completing
+batch result back into the required live lifecycle would still require the custom orchestration and
+would discard the existing M3.1 timeout/result/error contract.
 
 ## R1: How does `EvaluationConfig` satisfy FR-013/FR-014/FR-015 with minimal validation code?
 
-**Decision**: Model metrics and thresholds as a single field, `metric_thresholds: dict[str,
-float]` (metric name → threshold), instead of a `list[str]` of metric names plus a parallel
-`dict[str, float]` of thresholds.
+**Decision**: Model submitted metrics and thresholds as `list[MetricThreshold]`, where each entry
+contains a metric name and threshold. Validate the preserved entries, then construct an internal
+`dict[str, float]` for threshold lookup.
 
-**Rationale**: FR-015 requires "metric names ... unique and ... one-to-one correspondence with
-thresholds; a duplicate metric name, missing threshold, or threshold without a corresponding
-metric MUST cause rejection." A Python `dict` cannot hold a duplicate key and cannot have a
-metric without a threshold or a threshold without a metric — the one-to-one, no-duplicates
-invariant is structurally guaranteed by the chosen type, so FR-015 needs zero runtime
-cross-validation code. This mirrors the project's existing preference for structural guarantees
-over runtime checks (e.g., `TraceFilter.__post_init__` for `start_date < end_date`,
-`BotType(str, Enum)` for closed vocab).
+**Rationale**: FR-015 requires duplicate submissions to be rejected. A Python `dict` loses that
+information before validation, so it cannot satisfy the rejection contract. A value object entry
+always couples one metric with one threshold, preventing missing or extra thresholds, while the
+list preserves duplicate metric names until `Evaluator.start()` rejects them. The validated
+internal mapping retains O(1) lookup for threshold-override plumbing.
 
 **Alternatives considered**:
 - Two parallel structures (`metrics: list[str]`, `thresholds: dict[str, float]`) — rejected:
-  requires explicit duplicate/missing/extra cross-validation that a dict eliminates for free.
-- `list[tuple[str, float]]` — rejected: still allows duplicate metric names; no advantage over a
-  dict and loses O(1) lookup used by validation/threshold-override plumbing.
+  they require cross-validation and can represent missing or extra thresholds.
+- A caller-supplied `dict[str, float]` — rejected: duplicate metric submissions are lost before
+  FR-015 validation can reject them.
 
-**Remaining validation** (still required, not eliminated by the type choice): every key must be a
-metric `MetricFactory._registry` knows (FR-014, reuses `UnknownMetricError` — same class the
-existing `EvaluationOrchestrator` raises for the identical condition, see R3) and every value must
-be within `[0.0, 1.0]` (FR-002, reuses `InvalidThresholdError` — same shape/message as the
-orchestrator's own threshold-range check).
+**Validation**: the list must be non-empty; names must be unique (`DuplicateMetricError`); every
+name must contain a non-whitespace character and satisfy `MetricFactory.is_registered(name)`
+(FR-014, reuses `UnknownMetricError`); and
+every threshold must be a non-boolean `int`/`float` satisfying
+`math.isfinite(float(value)) and 0.0 <= float(value) <= 1.0` (FR-002, reuses
+`InvalidThresholdError`). Strings are rejected rather than coerced. Only after every entry passes
+does `Evaluator` convert valid values to float in its internal mapping. This explicit finite check
+prevents comparison formulations such as `value < 0 or value > 1` from accidentally accepting
+`NaN`.
 
 ## R2: How does `Evaluator` return an `EvaluationRun` immediately while processing continues?
 
 **Decision**: `Evaluator.start()` validates synchronously, constructs the `EvaluationRun`, starts
 a daemon `threading.Thread` running the pipeline against that same object, and returns the object
-immediately. The background thread mutates the run's attributes in place (`status`, `processed`,
-`total`, `errors`, `end_timestamp`); callers holding the returned reference observe those
-mutations directly — there is no separate "refresh" or "poll" call.
+immediately. The background thread updates private run state only through public methods guarded
+by a per-run `threading.RLock`; synchronized properties expose individual values.
+`EvaluationRun.snapshot()` captures an immutable point-in-time `EvaluationRunSnapshot` containing
+status, counts, derived progress, timestamps, detached errors/results, and failure information in
+one critical section. `EvaluationRun.wait(timeout)` uses a private `threading.Event` set on the
+first terminal transition, so callers and tests can deterministically wait for completion without
+a refresh API or arbitrary polling delay.
+
+The worker entrypoint wraps its planned pipeline handling in an outer `except Exception` guard.
+If an unexpected error escapes without identifying a trace, it stores `sanitize_error(exc)` in
+`run.failure_message` and transitions the run to `UNABLE_TO_RUN`. This guard does not replace
+per-trace handling: identified extraction, normalization, and evaluation failures continue to be
+recorded as `PerTraceError` and allow the run to complete with failures.
 
 **Rationale**: Every step already wired for this milestone is synchronous/blocking Python:
-`TraceCollector.collect()` makes one blocking HTTP call via `TraceRepository`, and
+`TraceCollector.collect_all()` makes blocking paginated HTTP calls via `TraceRepository`, and
 `TraceNormalizer.normalize()` is pure CPU-bound synchronous code. Only
 `EvaluationOrchestrator.evaluate()` (M3.1) is a coroutine. There is no FastAPI/ASGI event loop
 guaranteed to be running when `start()` is called — Assumptions explicitly leave the trigger
@@ -55,9 +115,13 @@ today. Each per-trace call to `EvaluationOrchestrator.evaluate()` is driven with
 inside the background thread — a fresh event loop per trace, mirroring how
 `contracts/evaluation-api.md` already tells synchronous callers to invoke `metric.measure()`.
 
-CPython's GIL makes single-writer/multi-reader attribute mutation on the shared `EvaluationRun`
-instance safe without extra locking; the one place true mutual exclusion is required — serializing
-concurrent retry attempts — uses a `threading.Lock` (R5).
+The GIL is not treated as a synchronization contract: multi-field transitions, list updates, and
+derived progress reads must remain coherent independently of interpreter implementation details.
+The state `RLock` is held only while reading/updating in-memory state and is released before calling
+the collector, normalizer, orchestrator, or observer. A separate non-blocking retry lock serializes
+delivery attempts. Retry status validation and retry-lock acquisition happen while holding the
+state lock; on successful retry, the final status is recorded before releasing the retry lock, so
+no second retry can enter between publication success and the status transition.
 
 **Alternatives considered**:
 - `asyncio.create_task()` — rejected: requires a running event loop at call time, which callers
@@ -75,8 +139,8 @@ concurrent retry attempts — uses a `threading.Lock` (R5).
 **Decision**: Extend `EvaluationOrchestrator.evaluate()` with an optional keyword-only
 `thresholds: dict[str, float] | None = None` parameter. When provided, `_resolve_thresholds` uses
 that mapping directly instead of reading `bots.{bot_id}.metrics.{name}.threshold` from
-`ConfigManager`. `Evaluator` always passes the run's already-validated `metric_thresholds`
-explicitly; existing M3.1 callers that omit the argument keep today's config-lookup behavior
+`ConfigManager`. `Evaluator` validates the submitted `list[MetricThreshold]`, then passes its
+internal `dict[str, float]` mapping explicitly; existing M3.1 callers that omit the argument keep today's config-lookup behavior
 unchanged (backward compatible, additive change only).
 
 **Rationale**: `EvaluationOrchestrator` (M3.1) is the single place that turns a `(bot_id,
@@ -101,10 +165,11 @@ never written to, satisfying "the bot's stored defaults MUST remain unchanged af
 ## R4: How is an unknown `bot_id` rejected before run state is created (FR-002)?
 
 **Decision**: Reuse the exact check `TraceNormalizer` and `TraceCollector` already depend on
-transitively — `ConfigManager.instance().get(f"bots.{bot_id}.bot_type")` — catching `ConfigError`
-and re-raising a new `UnknownBotError(bot_id)` from `deepeval_platform/evaluation/errors.py`,
-following the file's stated convention ("each message carries every diagnostic field a caller
-would need without reformatting", same shape as `UnmappedBotError` in the normalization domain).
+transitively — `ConfigManager.instance().get(f"bots.{bot_id}.bot_type")`. Translate only the
+manager's explicit missing-key outcome for that exact path, or an empty returned value, to the new
+`UnknownBotError(bot_id)` from `deepeval_platform/evaluation/errors.py`. Parsing/loading and other
+`ConfigError` failures propagate unchanged, following the file's stated convention that each
+domain exception carries every diagnostic field a caller needs without reformatting.
 
 **Rationale**: `bot_type` is the one key every configured bot in `bots.yaml` unconditionally
 declares (`StrategyFactory`, `TraceNormalizer` both depend on it); checking it is the same
@@ -121,46 +186,67 @@ declares (`StrategyFactory`, `TraceNormalizer` both depend on it); checking it i
 
 **Decision**: `PerTraceError.stage` is `Literal["extraction", "normalization", "evaluation"]`
 (same modeling convention as `DocumentFailure.stage: Literal["readability", "parsing"]` in M4.1).
-In this milestone's implementation, only `"normalization"` (a `TraceNormalizer.normalize()`
-exception, e.g. `UnmappedBotError`/`FieldMappingTypeError`) and `"evaluation"` (any exception
-`EvaluationOrchestrator.evaluate()` raises for one trace) are ever produced. `"extraction"` is
-defined for parity with FR-010/the data model's stated vocabulary and for future extractors that
-fetch traces one-at-a-time, but `TraceCollector.collect()` (M2.1) is one bulk call — if it raises,
-every trace in the period is equally affected, which is exactly the edge case the spec calls
-"trace source is entirely unreachable" and routes to `UNABLE_TO_RUN`, not to a per-trace error.
+This milestone adds `TraceCollector.collect_all()` returning `TraceCollectionResult`, containing
+successfully extracted traces plus identified `TraceCollectionError` values. `Evaluator` converts
+the latter to extraction-stage `PerTraceError` entries. A setup/connectivity failure before any
+affected trace can be identified remains a whole-run `UNABLE_TO_RUN` outcome.
 
-**Rationale**: This is the literal edge-case distinction the spec draws: "a single trace being
-malformed" (per-trace, isolated) vs. "the trace source is entirely unreachable" (whole-run,
-`UNABLE_TO_RUN`). Given the current `TraceCollector`/`TraceRepository` contract, there is no
-partial-extraction outcome — extraction for a run either produces the full candidate list or
-raises once for the whole call. Recording this now avoids a future reader assuming dead code when
-no test exercises `PerTraceError(stage="extraction", ...)`.
+**Rationale**: This implements the specification's required distinction between an identified
+single-trace extraction failure (per-trace, isolated) and an entirely unreachable trace source
+(whole-run, `UNABLE_TO_RUN`). The collection result makes this distinction explicit instead of
+leaving `PerTraceError(stage="extraction")` unreachable.
 
 Each `PerTraceError` reuses the existing `sanitize_error()` helper from `evaluation/errors.py` for
 its message (same redaction of bearer tokens/opaque credentials already applied to
-`MetricResult.error`), plus `type(exc).__name__` as the stable `error_code`.
+`MetricResult.error`). Its `PerTraceErrorCode` is selected only from the failed stage:
+`EXTRACTION_FAILED`, `NORMALIZATION_FAILED`, or `EVALUATION_FAILED`; it MUST NOT expose
+`type(exc).__name__`, which is an implementation detail and can change across dependencies.
 
-## R6: How does result handoff/delivery-retry work without building persistence (FR-007)?
+## R6: How does result publication/delivery-retry work without building persistence (FR-007)?
 
-**Decision**: A small `ResultHandoff` ABC (`deepeval_platform/evaluation/result_handoff.py`) with
-one method, `deliver(run: EvaluationRun, results: dict[str, EvaluationResult]) -> None`, that may
-raise on failure. `Evaluator` takes an injected `ResultHandoff` implementation (constructor
-parameter, like every other collaborator in this codebase); this milestone ships no concrete
-non-trivial implementation — durable persistence (`EvaluationRepository`) and downstream
-notification (`ResultPublisher`, Observer pattern) are explicitly separate, future milestones per
-the spec's Clarifications and the constitution's own pattern table. Tests and any interim caller
-supply their own `ResultHandoff` (e.g. an in-memory collecting stub); production wiring of a real
-handoff is out of scope here, exactly as `EvaluationRepository`/`ResultPublisher` wiring was left
-out of M4.1 for the same reason.
+**Decision**: `Evaluator.start(config, observer)` receives exactly one requester-supplied
+`ResultObserver`. It stores that observer privately on the resulting `EvaluationRun` and invokes
+the injected `ResultPublisher` through `publish(run, results, observer)`. This applies the
+constitution's mandatory Observer pattern without treating every observer as a global subscriber.
+Tests use separate in-memory observers; durable persistence (`EvaluationRepository`) and
+downstream destination observers remain separate future capabilities.
+
+After all traces are processed and results are retained, the initial delivery transitions the run
+from `IN_PROGRESS` to non-final `DELIVERING` before invoking the observer. Consequently, observer
+code cannot see a run that still claims to be evaluating traces, while `wait()` remains unsignaled
+until publication succeeds (`COMPLETED`/`COMPLETED_WITH_FAILURES`) or raises (`DELIVERY_FAILED`).
+The first `end_timestamp` is set only at that final transition.
 
 `EvaluationRun` retains its completed per-trace results as a private instance attribute
-(`_results: dict[str, EvaluationResult]`). `Evaluator.retry_delivery(run: EvaluationRun)` takes the
-run object itself — not a `run_id` looked up from some server-side registry — validates
-`run.status is RunStatus.DELIVERY_FAILED` (else `InvalidRetryStateError`, no state change),
-acquires a non-blocking `threading.Lock` stored on the run (`run._retry_lock`) to serialize
-concurrent attempts (else `RetryInProgressError`, no state change), and calls
-`self._handoff.deliver(run, run._results)` again — no re-extraction, re-normalization, or
-re-evaluation.
+(`_results: dict[str, EvaluationResult]`). `retain_results()` stores `deepcopy(results)` so the
+caller's working dictionary and nested result objects cannot remain aliases of canonical run
+state. The public `results` property and each `delivery_payload()` call return a fresh
+`MappingProxyType(deepcopy(_results))`. `delivery_payload()` returns exactly
+`(results_snapshot, observer)`, consumed as `ResultPublisher.publish(run, results_snapshot,
+observer)`. The proxy rejects key replacement/removal, while the deep
+copy ensures mutation of a nested `EvaluationResult`, `MetricResult`, or `ErrorDetail` affects only
+that one snapshot. `Evaluator.retry_delivery(run: EvaluationRun)` takes the run object itself — not
+a `run_id` looked up from some server-side registry — and calls `run.begin_retry()`. That method
+atomically validates `DELIVERY_FAILED` and acquires the non-blocking retry guard under the state
+lock, raising `InvalidRetryStateError` or `RetryInProgressError` without changing state. The
+Evaluator unpacks `results_snapshot, observer = run.delivery_payload()`, publishes with
+`ResultPublisher.publish(run, results_snapshot, observer)`, and, on success, calls a run-owned
+`complete_delivery(status)` operation that records the restored completion status and clears the
+observer atomically before releasing the retry guard in `finally` — no
+  re-extraction, re-normalization, or re-evaluation. Successful initial publication or retry
+  releases the run's private observer reference in the same synchronized action as completion;
+  failed publication retains it because retry remains valid. A zero-trace run follows the same
+  path and publishes exactly one empty detached mapping.
+
+A retry leaves `run.status == DELIVERY_FAILED` while the observer call is in flight. It does not
+reuse `DELIVERING`: the existing delivery-failed outcome and the acquired retry guard together let
+a concurrent request receive the required `RetryInProgressError` rather than being misclassified
+as an invalid-state request. Success restores the original completion outcome; failure leaves the
+status unchanged.
+
+Each retry creates a new detached snapshot from the canonical retained copy. Therefore an observer
+that mutates its first delivery payload before raising cannot influence requester inspection or the
+payload supplied to a later retry.
 
 **Rationale**: The clarification "retain ... results for as long as its `EvaluationRun` handle
 remains reachable" is a direct pointer to normal Python reference-counting/GC semantics, not to a
@@ -188,16 +274,65 @@ status" (US2): the caller already holds the mutated handle from `start()`; there
 **Decision**: `EvaluationConfig.__post_init__` normalizes `period_start`/`period_end` to UTC —
 naive `datetime` values are treated as already UTC (`.replace(tzinfo=timezone.utc)`), aware values
 are converted (`.astimezone(timezone.utc)`) — then validates `period_start < period_end` (strict,
-per clarification: equal boundaries are invalid). `TraceCollector.collect()` is called with a
-`TraceFilter(bot_id, start_date=period_start, end_date=period_end)`; `TraceFilter.__post_init__`
-already enforces `start_date < end_date`, so the half-open `[start, end)` contract is carried
-through unchanged into the existing M2.1 collection layer without modification there.
+per clarification: equal boundaries are invalid). A
+`TraceFilter(bot_id, start_date=period_start, end_date=period_end)` is passed to
+`TraceCollector.collect_all()`; `TraceFilter.__post_init__` already enforces
+`start_date < end_date`, and `collect_all()` applies the half-open boundary locally after paginated
+retrieval (R8).
 
 **Rationale**: This matches the existing convention in `EvaluationRepository.get_by_bot`, which
 already treats naive `datetime` as UTC and only rejects non-UTC *aware* offsets. `TraceFilter`
 already models exactly the half-open, `start < end` contract this feature needs — no change to
 `collection/trace_filter.py` or `TraceRepository` is required; `Evaluator` only needs to normalize
-before constructing the filter.
+before constructing the filter. Non-`datetime` boundaries are rejected with `TypeError` before
+timezone operations. Empty or whitespace-only `bot_id` and metric names are invalid before run
+creation.
+
+## R8: Exhaustive collection without breaking M2.1's 500-trace contract
+
+**Decision**: Preserve `TraceCollector.collect()` exactly as specified by M2.1 (most recent 500,
+with a truncation warning) and add `TraceCollector.collect_all()` for evaluation runs.
+`collect_all()` delegates to a new `TraceRepository.get_all_by_date_range()` operation, which calls
+Langfuse `GET /api/public/traces` with `page`, one fixed `limit`, and stable `order_by`, appends each response's `data`, and
+continues through `meta.totalPages`. The repository converts all rows to `TraceRecord`; the
+collector then applies the platform extractor, deterministic timestamp ordering, and an explicit
+local `start <= start_time < end` check without slicing the result.
+
+Before constructing `TraceCollectionResult`, `collect_all()` rejects every successful/error outcome
+whose `trace_id` is empty or whitespace-only; collection fails as a whole because inventing an ID
+would break requester correlation. It then groups every remaining outcome by `trace_id`. A group
+with exactly one outcome is retained. Any ID with multiple
+outcomes is represented by one sanitized `TraceCollectionError` and no successful record,
+regardless of whether the repeated records have equal payloads. This avoids silently selecting a
+canonical payload from inconsistent pages and establishes the invariant required by the evaluator's
+`dict[trace_id, EvaluationResult]`: one logical ID produces at most one result.
+
+**Documentation/API validation**: The official Langfuse public API documentation defines list
+responses as `{data, meta}` and the installed Langfuse 4.13.0 API exposes trace-list `page`, `limit`,
+`from_timestamp`, `to_timestamp`, and `order_by` parameters. Its `MetaResponse` contains `page`,
+`limit`, `total_items`, and `total_pages`. The direct HTTP repository uses the corresponding REST
+fields and treats missing/malformed pagination metadata as a retrieval failure rather than silently
+claiming exhaustive coverage. Repeated pages or rows, changing totals, and premature empty pages
+also fail rather than loop or return partial data.
+
+**Rationale**: Changing `collect()` to return more than 500 would violate M2.1 FR-001 and break a
+shipped public behavior. Reusing it unchanged would violate M4.2 FR-004 for large periods. The
+additive method gives each use case an explicit contract and keeps pagination in the repository,
+the constitution-mandated owner of storage queries. Local boundary filtering makes M4.2's
+half-open interval independent of endpoint boundary inclusivity and prevents an end-boundary trace
+from entering the run.
+
+**Alternatives considered**:
+- Remove or raise `MAX_INTERACTIONS` in `collect()` — rejected because it breaks M2.1's mandatory
+  capped contract and existing tests/callers.
+- Call the repository once and bypass only the collector slice — rejected because Langfuse's list
+  endpoint is paginated and a single response cannot establish exhaustive coverage.
+- Put the page loop in `Evaluator` — rejected because raw retrieval belongs exclusively to
+  `TraceRepository` under Constitution Principle VI and M2.1 FR-002.
+- Keep the first or last duplicate record — rejected because page ordering must not silently decide
+  which conflicting payload is evaluated.
+- Preserve duplicate records in a list and let the result dictionary overwrite — rejected because
+  it violates FR-006's one-result-per-trace guarantee and hides data loss.
 
 ## Post-implementation gate status
 

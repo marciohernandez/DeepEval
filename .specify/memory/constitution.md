@@ -1,38 +1,30 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.3.0 -> 1.4.0
-Bump type: MINOR (the approved technology stack is expanded for DeepEval-native document
-generation and authenticated Supabase access)
+ Version change: 1.4.0 -> 2.0.0
+ Bump type: MAJOR (Principle VI's ResultPublisher requirement is redefined so concrete output
+ destinations are delivered by their own scoped features rather than all at once)
 
-Added sections:
-  - Technology Stack -> Synthetic document support: pypdf, docx2txt, and chromadb are approved
-    runtime dependencies required by DeepEval's native document generation pipeline.
-  - Persistence credential guidance now includes the Supabase anonymous key for user-scoped,
-    RLS-enforced access.
+Added sections: N/A
 
 Modified sections:
-  - Principle IV / task generation: the shared tasks template now treats TDD and integration
-    tests as mandatory rather than optional.
-  - Quality Gates: authenticated persistence must use a user-scoped Supabase session and RLS;
-    caller-provided organization identifiers alone are not authorization.
+  - Principle VI / Observer: ResultPublisher remains mandatory, but concrete Langfuse, CSV,
+    Qdrant, and Dashboard observers are required only in the feature that introduces each
+    destination. A result-producing feature may deliver the extensible publisher contract alone.
+  - Quality Gates / Pattern compliance: export-target checks now require an Observer extension
+    without Evaluator changes, rather than all output targets in every feature.
 
 Removed sections: N/A
 
 Templates reviewed:
-  - UPDATED: .specify/templates/tasks-template.md
-  - UPDATED: .agents/skills/speckit-tasks/SKILL.md
-  - UPDATED: .claude/skills/speckit-tasks/SKILL.md
-  - UPDATED: .opencode/commands/speckit.tasks.md
-  - UPDATED: .github/agents/speckit.tasks.agent.md
-  - UPDATED: briefing.md
-  - UPDATED: tech_stack.md
   - OK: .specify/templates/plan-template.md
   - OK: .specify/templates/spec-template.md
+  - OK: .specify/templates/tasks-template.md
+  - OK: .specify/templates/commands/ (directory does not exist)
+  - OK: README.md
+  - OK: CLAUDE.md
 
-Follow-up TODOs:
-  - TODO(TOKEN_USAGE): LLMProviderBase._to_token_usage() still reports TokenUsage(0, 0) when
-    DeepEval cannot price an unlisted model; revisit when an unlisted model is configured.
+Follow-up TODOs: N/A
 -->
 
 # DeepEval Chatbot Evaluator Constitution
@@ -161,7 +153,7 @@ The following patterns MUST be applied in the specified contexts:
 | **Factory Method** | `MetricFactory.create(name)` — instantiates DeepEval metrics without if/else chains;<br>`LLMProviderFactory.create(provider, model)` — instantiates the correct LLM provider |
 | **Singleton** | `ConfigManager`, `LangfuseClient`, `QdrantVectorStoreProvider` — one instance per process, no re-reads |
 | **Strategy** | `TraceExtractor` — `FlowiseExtractor` and `LangChainExtractor` as interchangeable strategies;<br>new bot type = new subclass only |
-| **Observer** | `ResultPublisher` — notifies Langfuse, CSV export, Qdrant, and Dashboard after evaluation;<br>new output target = new observer only |
+| **Observer** | `ResultPublisher` — provides the extensible publication contract for evaluation results. A feature that introduces Langfuse, CSV export, Qdrant, Dashboard, or another output target MUST implement that target as a `ResultObserver`; a result-producing feature MAY implement the publisher contract without concrete destination observers when those destinations are explicitly out of scope.<br>new output target = new observer only, with zero `Evaluator` changes |
 | **Repository** | `TraceRepository`, `EvaluationRepository` — isolates storage queries from business logic;<br>DB backend swap (Supabase → Postgres) touches only repositories |
 
 **Rationale**: The system is explicitly designed to grow: new bots, metrics, personas, providers.
@@ -256,8 +248,9 @@ Every feature MUST pass all applicable gates before being considered complete:
    is evident in commit history.
 2. **Coverage** — `pytest-cov` reports ≥ 80% for all new and changed modules.
 3. **Zero hardcode** — Grep for hardcoded credentials returns empty on all new/changed files.
-4. **Pattern compliance** — New bots, metrics, and providers added as subclasses only;
-   no changes to existing factory, strategy, observer, or repository implementations.
+4. **Pattern compliance** — New bots, metrics, and providers are added as subclasses only.
+   Every new output target is implemented as a `ResultObserver` without changes to `Evaluator`;
+   concrete output targets are required only in the feature that introduces them.
 5. **DeepEval-first check** — Any code in the evaluation domain (metrics, strategies, trace
    extraction/collection, dataset generation, prompt optimization) is accompanied by a note
    confirming DeepEval's native classes/functions were checked before writing a custom
@@ -306,4 +299,4 @@ reference to the violated principle and why no simpler path exists.
 
 **Runtime guidance**: See `CLAUDE.md` for agent-specific runtime instructions.
 
-**Version**: 1.4.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-15
+**Version**: 2.0.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-17
