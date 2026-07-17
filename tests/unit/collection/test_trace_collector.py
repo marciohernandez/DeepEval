@@ -6,7 +6,12 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from deepeval_platform.collection.trace_collector import TraceCollector
+from deepeval_platform.collection.trace_collector import (
+    TraceCollectionError,
+    TraceCollectionResult,
+    TraceCollectionSetupError,
+    TraceCollector,
+)
 from deepeval_platform.collection.trace_filter import InteractionStatus, TraceFilter
 from deepeval_platform.repositories.models import TraceRecord
 from deepeval_platform.repositories.trace_repository import TraceRepositoryError
@@ -51,6 +56,15 @@ def _stub_repository(mocker, records: list[TraceRecord] | Exception):
         repo.get_by_date_range.side_effect = records
     else:
         repo.get_by_date_range.return_value = records
+    return repo
+
+
+def _stub_exhaustive_repository(mocker, records: list[TraceRecord] | Exception):
+    repo = mocker.MagicMock()
+    if isinstance(records, Exception):
+        repo.get_all_by_date_range.side_effect = records
+    else:
+        repo.get_all_by_date_range.return_value = records
     return repo
 
 
@@ -218,3 +232,149 @@ class TestEmptyAndErrors:
 
         args, _ = extract_spy.call_args
         assert args[1] == InteractionStatus.COMPLETED
+
+
+# ---------------------------------------------------------------------------
+# collect_all() — exhaustive collection (M4.2, R5/R8)
+# ---------------------------------------------------------------------------
+
+def _make_filter_range(**overrides) -> TraceFilter:
+    defaults = dict(
+        bot_id="my-bot",
+        start_date=datetime(2026, 1, 1),
+        end_date=datetime(2026, 1, 2),
+    )
+    defaults.update(overrides)
+    return TraceFilter(**defaults)
+
+
+class TestCollectAllExhaustive:
+    def test_returns_more_than_500_traces_without_truncation(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        records = [_make_record(i) for i in range(600)]
+        repo = _stub_exhaustive_repository(mocker, records)
+
+        result = TraceCollector(repo).collect_all(_make_filter_range())
+
+        assert isinstance(result, TraceCollectionResult)
+        assert len(result.traces) == 600
+        assert result.errors == []
+
+    def test_rechecks_half_open_boundary_locally(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        in_range = _make_record(0)
+        in_range.start_time = datetime(2026, 1, 1, 0, 0)
+        at_start = _make_record(1)
+        at_start.start_time = datetime(2026, 1, 1, 0, 0)  # inclusive boundary
+        at_end = _make_record(2)
+        at_end.start_time = datetime(2026, 1, 2, 0, 0)  # exclusive boundary
+        repo = _stub_exhaustive_repository(mocker, [in_range, at_start, at_end])
+
+        result = TraceCollector(repo).collect_all(
+            _make_filter_range(
+                start_date=datetime(2026, 1, 1, 0, 0), end_date=datetime(2026, 1, 2, 0, 0)
+            )
+        )
+
+        returned_ids = {t.trace_id for t in result.traces}
+        assert at_end.trace_id not in returned_ids
+        assert in_range.trace_id in returned_ids
+        assert at_start.trace_id in returned_ids
+
+    def test_duplicate_ids_become_one_error_and_no_successful_record(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        dup_a = _make_record(0)
+        dup_b = _make_record(1)
+        dup_b.trace_id = dup_a.trace_id
+        unique = _make_record(2)
+        repo = _stub_exhaustive_repository(mocker, [dup_a, dup_b, unique])
+
+        result = TraceCollector(repo).collect_all(_make_filter_range())
+
+        assert [t.trace_id for t in result.traces] == [unique.trace_id]
+        assert len(result.errors) == 1
+        assert result.errors[0].trace_id == dup_a.trace_id
+
+    def test_errors_only_duplicates_yield_no_successful_record(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        dup_a = _make_record(0)
+        dup_b = _make_record(1)
+        dup_b.trace_id = dup_a.trace_id
+        repo = _stub_exhaustive_repository(mocker, [dup_a, dup_b])
+
+        result = TraceCollector(repo).collect_all(_make_filter_range())
+
+        assert result.traces == []
+        assert len(result.errors) == 1
+        assert result.errors[0].trace_id == dup_a.trace_id
+
+    def test_unique_ids_unaffected_by_unrelated_duplicates(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        dup_a = _make_record(0)
+        dup_b = _make_record(1)
+        dup_b.trace_id = dup_a.trace_id
+        unique_1 = _make_record(2)
+        unique_2 = _make_record(3)
+        repo = _stub_exhaustive_repository(mocker, [dup_a, unique_1, dup_b, unique_2])
+
+        result = TraceCollector(repo).collect_all(_make_filter_range())
+
+        returned_ids = {t.trace_id for t in result.traces}
+        assert returned_ids == {unique_1.trace_id, unique_2.trace_id}
+        assert len(result.errors) == 1
+
+    def test_empty_or_whitespace_trace_id_invalidates_whole_collection(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        blank = _make_record(0)
+        blank.trace_id = "   "
+        repo = _stub_exhaustive_repository(mocker, [blank])
+
+        with pytest.raises(TraceCollectionSetupError):
+            TraceCollector(repo).collect_all(_make_filter_range())
+
+    def test_setup_or_connectivity_failure_before_identification_raises(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        repo = _stub_exhaustive_repository(mocker, TraceRepositoryError("connection failed"))
+
+        with pytest.raises(TraceRepositoryError):
+            TraceCollector(repo).collect_all(_make_filter_range())
+
+    def test_existing_collect_still_capped_at_500(self, mocker):
+        _stub_config_platform(mocker, "flowise")
+        records = [_make_record(i) for i in range(600)]
+        repo = _stub_repository(mocker, records)
+
+        result = TraceCollector(repo).collect(_make_filter())
+
+        assert len(result) == 500
+
+
+class TestTraceCollectionResultInvariant:
+    def test_rejects_duplicate_ids_across_traces_and_errors(self):
+        record = _make_record(0)
+        with pytest.raises(ValueError):
+            TraceCollectionResult(
+                traces=[record],
+                errors=[TraceCollectionError(trace_id=record.trace_id, message="boom")],
+            )
+
+    def test_rejects_duplicate_ids_within_traces(self):
+        record_a = _make_record(0)
+        record_b = _make_record(1)
+        record_b.trace_id = record_a.trace_id
+        with pytest.raises(ValueError):
+            TraceCollectionResult(traces=[record_a, record_b], errors=[])
+
+    def test_rejects_empty_trace_id(self):
+        record = _make_record(0)
+        record.trace_id = ""
+        with pytest.raises(ValueError):
+            TraceCollectionResult(traces=[record], errors=[])
+
+    def test_accepts_disjoint_unique_ids(self):
+        record = _make_record(0)
+        result = TraceCollectionResult(
+            traces=[record], errors=[TraceCollectionError(trace_id="other-id", message="boom")]
+        )
+        assert result.traces == [record]
+        assert len(result.errors) == 1

@@ -92,7 +92,7 @@ capability required.
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T004 [P] [US1] Add failing unit tests for the public `EvaluationConfig` contract in
+- [X] T004 [P] [US1] Add failing unit tests for the public `EvaluationConfig` contract in
        `tests/unit/evaluation/test_evaluation_config.py`: UTC normalization of naive/aware
        `period_start`/`period_end` (research.md R7), `InvalidPeriodError` when `period_end` is not
        strictly later than `period_start` (raised in `__post_init__`, no collaborator needed), and
@@ -104,12 +104,12 @@ capability required.
        raw threshold values are not silently coerced by construction. Assert naive datetimes mean
        UTC, aware datetimes are converted, and non-datetime boundaries raise `TypeError` — run and
        observe RED
-- [ ] T005 [P] [US1] Add failing unit tests for `RunStatus`/`PerTraceErrorCode`/`PerTraceError` in
+- [X] T005 [P] [US1] Add failing unit tests for `RunStatus`/`PerTraceErrorCode`/`PerTraceError` in
        `tests/unit/evaluation/test_evaluation_run.py`: `RunStatus` has exactly the seven values from
        data-model.md; `PerTraceErrorCode` has exactly `extraction_failed`, `normalization_failed`,
        and `evaluation_failed`; `PerTraceError` holds `trace_id`/`stage`/`error_code`/`message`.
        Keep this test independently executable before `EvaluationRun` exists — run and observe RED
-- [ ] T006 [US1] After T013 makes the prerequisite enums/value objects importable, add failing unit tests for `EvaluationRun` in
+- [X] T006 [US1] After T013 makes the prerequisite enums/value objects importable, add failing unit tests for `EvaluationRun` in
         `tests/unit/evaluation/test_evaluation_run.py`: `id` is a fresh `uuid4()` per instance,
         `processed`/`total`/`errors` default correctly, `progress` is `None` while `total is None`,
          `1.0` when `total == 0`, else `processed / total`; `wait(timeout)` returns `False` before a
@@ -128,7 +128,7 @@ capability required.
            failed delivery retains it. Assert retry status validation plus guard acquisition is atomic (FR-003, FR-007, FR-008,
           Constitution Principle I) — run and observe RED (depends on T005
        existing in the same file)
-- [ ] T007 [US1] After T012/T014/T034/T050 make the public collaborator and model contracts
+- [X] T007 [US1] After T012/T014/T034/T050 make the public collaborator and model contracts
         importable, add failing unit tests for `Evaluator.start()` pre-condition validation in
         `tests/unit/evaluation/test_evaluator.py`: empty `metric_thresholds` → `EmptyMetricListError`,
         unregistered metric → `UnknownMetricError`; each invalid threshold class (below zero, above
@@ -144,7 +144,7 @@ capability required.
         bot IDs and metric names. Add a mixed-validity entry list proving all submitted entries are
         validated before float conversion or internal mapping construction and that caller inputs
         remain unchanged — run and observe RED (depends on T012, T014, T034, T050)
-- [ ] T008 [US1] Add failing unit tests for `Evaluator.start()` happy-path orchestration in
+- [X] T008 [US1] Add failing unit tests for `Evaluator.start()` happy-path orchestration in
        `tests/unit/evaluation/test_evaluator.py`: stubbed `TraceCollector.collect_all()` returns a
        `TraceCollectionResult` containing N uniquely identified traces, stubbed
         `TraceNormalizer`/`EvaluationOrchestrator` succeed for each, a requester-supplied observer
@@ -153,13 +153,13 @@ capability required.
        `run.status == COMPLETED`, `run.processed == N`,
       `run.total == N`, `run.end_timestamp` set once — run and observe RED (depends on T007 in the
       same file)
-- [ ] T009 [US1] Add failing unit test for zero-trace period in
+- [X] T009 [US1] Add failing unit test for zero-trace period in
       `tests/unit/evaluation/test_evaluator.py`: stubbed `TraceCollector.collect_all()` returns an
       empty `TraceCollectionResult` →
        `run.total == 0`, `run.progress == 1.0`, one empty detached mapping published to the supplied
        observer, `run.status == COMPLETED`, no error recorded (US1
       Scenario 2, SC-004) — run and observe RED
-- [ ] T010 [US1] Add failing unit test for independent concurrent runs in
+- [X] T010 [US1] Add failing unit test for independent concurrent runs in
        `tests/unit/evaluation/test_evaluator.py`: two `start()` calls, including the same bot with
        overlapping periods, via a
        slow stub collector and separate requester observers yield distinct `run.id`s with
@@ -167,22 +167,22 @@ capability required.
         receives only its own run's results. While one run is blocked in delivery/retry, repeatedly
         mutate/read the other and prove per-run locks do not serialize unrelated runs (US1 Scenario
         3, FR-007, FR-012) — run and observe RED
-- [ ] T011 [P] [US1] Add failing unit tests for `EvaluationOrchestrator.evaluate()`'s new optional
+- [X] T011 [P] [US1] Add failing unit tests for `EvaluationOrchestrator.evaluate()`'s new optional
        `thresholds` keyword parameter in `tests/unit/evaluation/test_evaluation_orchestrator.py`:
        when provided, scoring uses the override instead of the `bots.yaml`-resolved threshold; when
        omitted, existing config-lookup behavior is unchanged (research.md R3, FR-013) — run and
        observe RED
-- [ ] T047 [US1] Add a failing unit test in `tests/unit/evaluation/test_evaluator.py`: start a run
+- [X] T047 [US1] Add a failing unit test in `tests/unit/evaluation/test_evaluator.py`: start a run
        with non-UTC aware period boundaries and assert the stubbed `TraceCollector.collect_all()` receives the
        equivalent UTC-normalized start/end values, treating the requested interval as `[start, end)`
        so a start-boundary trace is included and an end-boundary trace is excluded — run and observe
        RED (FR-004; depends on T008's evaluator test scaffolding)
-- [ ] T053 [US1] Add a failing unit test in `tests/unit/evaluation/test_evaluator.py`: provide a
+- [X] T053 [US1] Add a failing unit test in `tests/unit/evaluation/test_evaluator.py`: provide a
        stubbed `TraceCollector.collect_all()` result containing more than 500 traces, assert the
        Evaluator never calls capped `collect()`, and confirm every trace is processed exactly once
        and produces one result (FR-004, SC-001/SC-002) — run and observe RED (depends on T008's
        evaluator test scaffolding)
-- [ ] T037 [US1] Add `tests/integration/test_evaluator_flow_integration.py` (marked `-m integration`)
+- [X] T037 [US1] Add `tests/integration/test_evaluator_flow_integration.py` (marked `-m integration`)
        using an in-process HTTP server that serves deterministic paginated responses with the
        Langfuse `{data, meta}` contract. Exercise real `TraceRepository` →
        `TraceCollector.collect_all()` → `TraceNormalizer` → `EvaluationOrchestrator` →
@@ -197,17 +197,17 @@ capability required.
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Implement frozen `MetricThreshold(name: str, threshold: float)` and the
+- [X] T012 [P] [US1] Implement frozen `MetricThreshold(name: str, threshold: float)` and the
        `EvaluationConfig` dataclass in `deepeval_platform/evaluation/evaluation_config.py`:
        `bot_id: str`, `metric_thresholds: list[MetricThreshold]`, `period_start`/`period_end:
        datetime`, with `__post_init__` UTC normalization and eager `InvalidPeriodError` check.
        Preserve the submitted list unchanged so duplicate names remain detectable by
        `Evaluator.start()` (data-model.md, research.md R1/R7) — GREEN for T004 (depends on T003
        for `InvalidPeriodError`; depends on T004 having been executed and observed RED)
-- [ ] T013 [P] [US1] Implement `RunStatus(str, Enum)`, `PerTraceErrorCode(str, Enum)`, and
+- [X] T013 [P] [US1] Implement `RunStatus(str, Enum)`, `PerTraceErrorCode(str, Enum)`, and
        `PerTraceError` dataclass in `deepeval_platform/evaluation/evaluation_run.py`
        (data-model.md) — GREEN for T005 (depends on T003 and T005 having been executed and observed RED)
-- [ ] T014 [US1] Implement `EvaluationRun` dataclass in
+- [X] T014 [US1] Implement `EvaluationRun` dataclass in
         `deepeval_platform/evaluation/evaluation_run.py`: private backing fields for mutable status,
          counts, timestamps, errors, failure message, results, and observer; private
          `_state_lock: threading.RLock`, `_retry_lock`, and `_completion_event` (excluded from
@@ -227,7 +227,7 @@ capability required.
          `EvaluationRunSnapshot` and ensure no collaborator call occurs while `_state_lock` is held
          — GREEN for T006
          (depends on T006 having been executed and observed RED after T013)
-- [ ] T043 [P] [US1] Add failing unit tests in `tests/unit/collection/test_trace_collector.py` for
+- [X] T043 [P] [US1] Add failing unit tests in `tests/unit/collection/test_trace_collector.py` for
        additive `collect_all()`: more than 500 traces are returned without truncation, UTC
        half-open boundaries are rechecked locally, identified per-trace extraction failures are
        returned alongside successful traces, and setup/connectivity failure before a trace is
@@ -239,7 +239,7 @@ capability required.
         repeated IDs is rejected. Assert empty and whitespace-only IDs invalidate collection rather
         than receiving synthetic IDs. Add a regression assertion that existing `collect()` remains
        capped at the most recent 500 — run and observe RED
-- [ ] T051 [P] [US1] Add failing unit tests in
+- [X] T051 [P] [US1] Add failing unit tests in
        `tests/unit/repositories/test_trace_repository.py` for `get_all_by_date_range()`: mock
        Langfuse `{data, meta}` responses across multiple `page` values, assert every row is returned
          exactly once through `meta.totalPages` using one implementation-owned fixed page size and
@@ -250,14 +250,14 @@ capability required.
         page numbers/data, `totalPages` changing between responses, and an empty page before the
         declared final page; each inconsistency must terminate with `TraceRepositoryError`, never
         loop or silently omit data — run and observe RED
-- [ ] T052 [US1] Implement additive `TraceRepository.get_all_by_date_range()` in
+- [X] T052 [US1] Implement additive `TraceRepository.get_all_by_date_range()` in
        `deepeval_platform/repositories/trace_repository.py`: request `GET /api/public/traces` with
          `page`/fixed `limit` plus bot/date filters and ascending trace timestamp/trace-ID ordering,
          append each page's data through a stable
         `meta.totalPages`, rejecting repeated/changing/malformed pagination or premature empty pages, and
         preserve the existing repository methods unchanged — GREEN for T051 (depends on T037 and
         T051 having been executed and observed RED)
-- [ ] T044 [US1] Implement additive `TraceCollector.collect_all()` in
+- [X] T044 [US1] Implement additive `TraceCollector.collect_all()` in
        `deepeval_platform/collection/trace_collector.py` to call
        `TraceRepository.get_all_by_date_range()`, return `TraceCollectionResult` with every
        successful trace and identified `TraceCollectionError`, enforce `[start, end)` locally, and
@@ -267,14 +267,14 @@ capability required.
        extraction error and no successful record. Enforce the same one-outcome-per-ID invariant in
         `TraceCollectionResult` construction. Preserve capped `collect()` unchanged — GREEN for T043
         (depends on T037, T043 having been executed and observed RED, and T052)
-- [ ] T042 [P] [US1] Add failing unit tests for `ResultPublisher`/`ResultObserver` in
+- [X] T042 [P] [US1] Add failing unit tests for `ResultPublisher`/`ResultObserver` in
           `tests/unit/evaluation/test_result_publisher.py`: define `ResultObserver` as an ABC with
           abstract `publish(run, results: Mapping)`; assert it cannot be instantiated directly,
           concrete subclasses satisfy runtime `isinstance`, and
           `ResultPublisher.publish(run, results, observer)` invokes only the supplied observer and
           propagates that observer's errors to the caller — run and
         observe RED
-- [ ] T034 [US1] Implement `ResultPublisher` and `ResultObserver` in
+- [X] T034 [US1] Implement `ResultPublisher` and `ResultObserver` in
           `deepeval_platform/evaluation/result_publisher.py`: implement `ResultObserver` as the ABC
           contract defined by T042; the publisher notifies only the supplied
          observer through `publish(run, results: Mapping[str, EvaluationResult], observer)` and
@@ -282,12 +282,12 @@ capability required.
         `Evaluator` —
        GREEN for T042 (depends on T042 having been executed and observed RED; use forward/type-only
        references so this interface does not require T014)
-- [ ] T015 [US1] Add the optional keyword-only `thresholds: dict[str, float] | None = None`
+- [X] T015 [US1] Add the optional keyword-only `thresholds: dict[str, float] | None = None`
       parameter to `EvaluationOrchestrator.evaluate()` in
       `deepeval_platform/evaluation/evaluation_orchestrator.py`, routing `_resolve_thresholds` to
       use it directly when provided instead of reading `bots.yaml` (research.md R3) — GREEN for
        T011 (depends on T011 and T037 having been executed and observed RED)
-- [ ] T016 [US1] Implement `Evaluator.__init__` and `Evaluator.start()` pre-condition validation in
+- [X] T016 [US1] Implement `Evaluator.__init__` and `Evaluator.start()` pre-condition validation in
         `deepeval_platform/evaluation/evaluator.py`: accept optional injectable `config_manager`,
         `metric_factory`, `collector`, `normalizer`, `orchestrator`, and `publisher` collaborators;
         compose production defaults only for omitted collaborators, passing the selected config
@@ -305,7 +305,7 @@ capability required.
           parsing/loading and other `ConfigError` failures to propagate; validate that `observer` is a non-null `ResultObserver` and raise
           `TypeError` before creating a run otherwise (research.md R1/R4) — GREEN for T007 (depends
           on T007 and T037 having been executed and observed RED, plus T012, T014, T003, T034, T050)
-- [ ] T017 [US1] Implement `Evaluator.start()`'s run creation and background-thread orchestration in
+- [X] T017 [US1] Implement `Evaluator.start()`'s run creation and background-thread orchestration in
         `deepeval_platform/evaluation/evaluator.py`: on successful validation, construct
          `EvaluationRun` with the requester-supplied observer accepted as a constructor argument and
           retained in private backing state, then spawn a daemon
@@ -324,7 +324,7 @@ capability required.
            retention portion required by T008, T009, T010, T047, and T053 (depends on those tests
           and T037 having been executed and observed RED, plus T016, T015, T034, T044)
 
-- [ ] T035 [US1] Implement initial result delivery in `Evaluator.start()`'s background-thread body
+- [X] T035 [US1] Implement initial result delivery in `Evaluator.start()`'s background-thread body
          (`deepeval_platform/evaluation/evaluator.py`): call `run.retain_results(results)` after trace
         processing, transition to non-final `DELIVERING`, unpack
         `results_snapshot, observer = run.delivery_payload()`, and call
@@ -466,7 +466,7 @@ results for every non-failing trace and the failure recorded with `trace_id`/`st
          collection error; never derive the code from `type(exc).__name__`.
         Continue to the next trace instead of stopping (FR-010) — GREEN for T024 (depends on T017,
         T022, T044)
-- [ ] T028 [US3] Implement terminal-outcome selection in `Evaluator.start()`
+- [X] T028 [US3] Implement terminal-outcome selection in `Evaluator.start()`
        (`deepeval_platform/evaluation/evaluator.py`): after all traces are processed, choose
        `COMPLETED` if `run.errors` is empty or `COMPLETED_WITH_FAILURES` otherwise, retain that
        outcome for initial publication and retry, and let T035/T036 apply it through

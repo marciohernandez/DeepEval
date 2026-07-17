@@ -900,6 +900,50 @@ class TestAllFourNewMetricsEnabledSimultaneouslyRunIndependently:
         assert result.passed is False
 
 
+class TestThresholdsOverrideParameter:
+    async def test_override_thresholds_used_instead_of_bots_yaml(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        values = {
+            "bots.test_rag_bot.metrics.faithfulness.threshold": "0.8",
+            "evaluation.metric_timeout_seconds": "30",
+            "evaluation.llm_judge.provider": "openai",
+            "evaluation.llm_judge.model": "gpt-4o",
+        }
+        stub_config.get_optional.side_effect = lambda key, default="": values.get(key, default)
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace,
+            bot_id="test_rag_bot",
+            metric_names=["faithfulness"],
+            thresholds={"faithfulness": 0.42},
+        )
+
+        mock_metric_factory.create.assert_called_once()
+        _, kwargs = mock_metric_factory.create.call_args
+        assert kwargs["threshold"] == 0.42
+        assert result.metrics["faithfulness"].threshold == 0.42
+
+    async def test_omitted_thresholds_keeps_existing_config_lookup_behavior(
+        self, stub_config, mock_metric_factory, mock_llm_provider_factory, trace
+    ):
+        values = {
+            "bots.test_rag_bot.metrics.faithfulness.threshold": "0.8",
+            "evaluation.metric_timeout_seconds": "30",
+            "evaluation.llm_judge.provider": "openai",
+            "evaluation.llm_judge.model": "gpt-4o",
+        }
+        stub_config.get_optional.side_effect = lambda key, default="": values.get(key, default)
+        orchestrator = EvaluationOrchestrator(config=stub_config)
+
+        result = await orchestrator.evaluate(
+            trace=trace, bot_id="test_rag_bot", metric_names=["faithfulness"]
+        )
+
+        assert result.metrics["faithfulness"].threshold == 0.8
+
+
 class TestUnknownBotIdUsesNativeDefaults:
     async def test_unknown_bot_id_uses_native_defaults(self, orchestrator, trace):
         result = await orchestrator.evaluate(
