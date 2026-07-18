@@ -156,41 +156,79 @@ class Evaluator:
     def _run_worker(
         self, run: EvaluationRun, config: EvaluationConfig, thresholds: dict[str, float]
     ) -> None:
-        trace_filter = TraceFilter(
-            bot_id=config.bot_id, start_date=config.period_start, end_date=config.period_end
-        )
-        collection_result = self._collector.collect_all(trace_filter)
+        """Extract/normalize/evaluate every trace in the requested period.
 
-        total = len(collection_result.traces) + len(collection_result.errors)
-        run.set_total(total)
-        run.transition_to(RunStatus.IN_PROGRESS)
-
-        metric_names = list(thresholds.keys())
-        results: dict[str, "EvaluationResult"] = {}
-
-        for collection_error in collection_result.errors:
-            run.append_error(
-                PerTraceError(
-                    trace_id=collection_error.trace_id,
-                    stage="extraction",
-                    error_code=PerTraceErrorCode.EXTRACTION_FAILED,
-                    message=collection_error.message,
-                )
+        A per-trace failure (normalization or evaluation) is isolated into a
+        PerTraceError and never stops the remaining traces (FR-010). Any
+        non-trace-specific failure — extraction setup/connectivity, or any other
+        unexpected error escaping the planned handling below — is caught by the
+        outer guard and routed to a whole-run UNABLE_TO_RUN instead (FR-011).
+        """
+        try:
+            trace_filter = TraceFilter(
+                bot_id=config.bot_id, start_date=config.period_start, end_date=config.period_end
             )
-            run.increment_processed()
+            collection_result = self._collector.collect_all(trace_filter)
 
-        for trace in collection_result.traces:
-            normalized = self._normalizer.normalize(trace)
-            result = asyncio.run(
-                self._orchestrator.evaluate(
-                    normalized, config.bot_id, metric_names, thresholds=thresholds
+            total = len(collection_result.traces) + len(collection_result.errors)
+            run.set_total(total)
+            run.transition_to(RunStatus.IN_PROGRESS)
+
+            metric_names = list(thresholds.keys())
+            results: dict[str, "EvaluationResult"] = {}
+
+            for collection_error in collection_result.errors:
+                run.append_error(
+                    PerTraceError(
+                        trace_id=collection_error.trace_id,
+                        stage="extraction",
+                        error_code=PerTraceErrorCode.EXTRACTION_FAILED,
+                        message=collection_error.message,
+                    )
                 )
-            )
-            results[trace.trace_id] = result
-            run.increment_processed()
+                run.increment_processed()
 
-        run.retain_results(results)
-        self._deliver(run)
+            for trace in collection_result.traces:
+                try:
+                    normalized = self._normalizer.normalize(trace)
+                except Exception as exc:
+                    run.append_error(
+                        PerTraceError(
+                            trace_id=trace.trace_id,
+                            stage="normalization",
+                            error_code=PerTraceErrorCode.NORMALIZATION_FAILED,
+                            message=sanitize_error(exc).message,
+                        )
+                    )
+                    run.increment_processed()
+                    continue
+
+                try:
+                    result = asyncio.run(
+                        self._orchestrator.evaluate(
+                            normalized, config.bot_id, metric_names, thresholds=thresholds
+                        )
+                    )
+                except Exception as exc:
+                    run.append_error(
+                        PerTraceError(
+                            trace_id=trace.trace_id,
+                            stage="evaluation",
+                            error_code=PerTraceErrorCode.EVALUATION_FAILED,
+                            message=sanitize_error(exc).message,
+                        )
+                    )
+                    run.increment_processed()
+                    continue
+
+                results[trace.trace_id] = result
+                run.increment_processed()
+
+            run.retain_results(results)
+            self._deliver(run)
+        except Exception as exc:
+            run.set_failure_message(sanitize_error(exc).message)
+            run.transition_to(RunStatus.UNABLE_TO_RUN)
 
     def _deliver(self, run: EvaluationRun) -> None:
         run.transition_to(RunStatus.DELIVERING)
@@ -204,3 +242,25 @@ class Evaluator:
                 RunStatus.COMPLETED if not run.errors else RunStatus.COMPLETED_WITH_FAILURES
             )
             run.complete_delivery(outcome)
+
+    def retry_delivery(self, run: EvaluationRun) -> EvaluationRun:
+        """Make exactly one new publication attempt for a DELIVERY_FAILED run, using the
+        results/observer already retained on it — never re-extracts, re-normalizes, or
+        re-evaluates (FR-007, SC-007). Raises InvalidRetryStateError/RetryInProgressError
+        (via run.begin_retry()) without changing state if retry is not currently valid.
+        """
+        run.begin_retry()
+        try:
+            results_snapshot, observer = run.delivery_payload()
+            try:
+                self._publisher.publish(run, results_snapshot, observer)
+            except Exception:
+                pass
+            else:
+                outcome = (
+                    RunStatus.COMPLETED if not run.errors else RunStatus.COMPLETED_WITH_FAILURES
+                )
+                run.complete_delivery(outcome)
+        finally:
+            run.end_retry()
+        return run

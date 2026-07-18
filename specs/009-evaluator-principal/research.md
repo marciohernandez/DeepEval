@@ -334,7 +334,77 @@ from entering the run.
 - Preserve duplicate records in a list and let the result dictionary overwrite — rejected because
   it violates FR-006's one-result-per-trace guarantee and hides data loss.
 
-## Post-implementation gate status
+## Post-implementation gate status (Phase 8, 2026-07-17)
 
-Not yet started — implementation begins with `/speckit-tasks`. This section will be completed at
-the end of the implementation phase, following the M4.1 precedent.
+T038-T041/T048/T056/T057 executed exactly as specified in tasks.md/quickstart.md. Results:
+
+- **T038 (focused feature suite)**: `uv run pytest tests/unit/evaluation/test_evaluation_config.py
+  tests/unit/evaluation/test_evaluation_run.py tests/unit/evaluation/test_evaluator.py
+  tests/unit/evaluation/test_evaluation_orchestrator.py
+  tests/unit/evaluation/metrics/test_metric_factory.py
+  tests/unit/evaluation/test_result_publisher.py tests/unit/collection/test_trace_collector.py
+  tests/unit/repositories/test_trace_repository.py -v` — 206 passed, 0 failed.
+- **T039 (integration verification)**: `uv run pytest tests/integration/test_evaluator_flow_integration.py
+  -v -rs -m integration` — 1 passed, 0 skipped. No `.env` read, no external network access, no
+  credential dependency (in-process HTTP stub server serving the Langfuse `{data, meta}` pagination
+  contract, plus a deterministic `DeepEvalBaseLLM` fake for the judge boundary).
+- **T040 (coverage)**: `uv run pytest --cov=deepeval_platform --cov-report=term-missing
+  --cov-report=json --cov-fail-under=80` — total project coverage 98.22% (gate: >=80%). Every
+  new/changed M4.2 module: `evaluation_config.py` 100%, `evaluation_run.py` 99% (one uncovered
+  line — `__repr__`), `result_publisher.py` 100%, `evaluator.py` 99% (one uncovered line — the
+  defensive "empty-but-not-raised `bot_type`" branch), `evaluation_orchestrator.py` 87%
+  (pre-existing M3.1 branches; the additive `thresholds` parameter itself is fully covered),
+  `metric_factory.py` 100%, `errors.py` 100%, `trace_collector.py` 99%, `trace_repository.py` 100%.
+  A full unsandboxed `uv run pytest` (all tests, no `-m` filter) was also run: 849 passed, 8
+  skipped, 7 failed — the 7 failures (`test_evaluation_repository_integration.py::
+  TestSchemaValidationIntegration`, `test_llm_factory_integration.py`'s real Anthropic/OpenRouter
+  calls, `test_qdrant_provider_integration.py` x4) are pre-existing and unrelated to M4.2: this
+  sandbox has no live Supabase/Anthropic/OpenRouter/Qdrant credentials, matching the exact M4.1
+  precedent's finding. Zero regressions attributable to M4.2.
+- **T048 (zero-hardcode scan)**: `detect-secrets` is not installed in this environment; ran the
+  documented fallback (`git diff --check` — clean; a credential/token/non-local-host regex across
+  `deepeval_platform/evaluation`, `deepeval_platform/collection`, `deepeval_platform/repositories`,
+  and the corresponding unit/integration test directories). 4 matches, all reviewed and cleared: two
+  are pre-existing test fixtures with obviously-fake values (`api_key="test-openai-key"`,
+  `access_token="tok"`) unrelated to M4.2; one is an XML namespace URI inside an unrelated
+  pre-existing DOCX fixture; one is this feature's own integration test constructing a URL from its
+  in-process stub server's `(host, port)` — always `127.0.0.1` at runtime, flagged only because the
+  regex cannot see through the f-string. No real credential, API key, token, password, or
+  non-local environment-specific host is present. All new configuration access (`LANGFUSE_HOST`,
+  `bots.{bot_id}.bot_type`, etc.) continues to go exclusively through `ConfigManager`.
+- **T056 (Python 3.11 compatibility) — blocked by a pre-existing, unrelated repo inconsistency, not
+  a code defect**: `pyproject.toml` declares `requires-python = ">=3.13"` (set 2026-06-22, commit
+  `e8deaa6`, long before this feature), which contradicts the constitution's stated "Core runtime:
+  Python `^3.11`". `uv python install 3.11` succeeded; `uv sync --python 3.11` against an isolated
+  venv was then refused by `uv` itself: `error: The requested interpreter resolved to Python
+  3.11.15, which is incompatible with the project's Python requirement: >=3.13`. This is a
+  project-wide configuration inconsistency predating and unrelated to M4.2; reconciling the
+  constitution's `^3.11` against `pyproject.toml`'s `>=3.13` is outside this feature's scope, and
+  was not silently patched. The full feature suite (811 unit tests + 1 integration test) was
+  verified GREEN under this repository's actual development interpreter, Python 3.13.13.
+- **T057 (TDD RED-before-GREEN git-history audit) — practice confirmed in-session; git history only
+  partially auditable at the chosen commit granularity**: `git log --reverse --name-status` from
+  the task-generation commit (`d270041`) forward shows commits bundling every test file and every
+  production file for a phase together (e.g. `0a091fe` for Phase 2, `27d303e` for all of Phase 3);
+  Phase 4-6 changes to `evaluator.py`/`test_evaluator.py` remained uncommitted in the working tree
+  at audit time. Work proceeded phase-by-phase per explicit instruction: for every task, the
+  corresponding test was written, run, and observed to fail (RED — `ImportError`/`AttributeError`/
+  `AssertionError` against not-yet-existing or not-yet-updated production code) before the matching
+  production code was written and re-run to GREEN; this was verified live via `uv run pytest`
+  after each test-writing step throughout the session. Because commits land at phase granularity
+  rather than per task, `git log` alone cannot reconstruct that ordering after the fact — a commit's
+  diff shows a test and its implementation together, not as two ordered commits. This satisfies the
+  TDD *practice* (verified in-session, described above) but not the *letter* of a pure git-log audit.
+  Recorded as an honest limitation of the chosen commit workflow, not an implementation defect;
+  finer-grained commits would be required to make this gate fully self-evident from git history
+  alone, and that choice is left to the project owner.
+
+**DeepEval-first boundary reconfirmed**: no part of this implementation touches native metric
+scoring. `Evaluator` composes `TraceCollector`/`TraceNormalizer`/`EvaluationOrchestrator`/
+`ResultPublisher` and delegates every per-trace measurement to the already-DeepEval-backed M3.1
+`EvaluationOrchestrator.evaluate()` (extended only with the additive `thresholds` override
+parameter specified in R3 above); no native `Metric`/`a_measure()` logic was reimplemented. The
+lifecycle capabilities `Evaluator` adds — extraction/normalization sequencing, live run state,
+stage-aware failure routing, and observer delivery/retry — remain exactly the set identified in the
+DeepEval-first native capability review above as absent from DeepEval 4.0.7's own batch `evaluate()`
+API.

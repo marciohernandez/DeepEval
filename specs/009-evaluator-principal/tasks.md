@@ -353,22 +353,22 @@ processed, using only the US1 `Evaluator`/`EvaluationRun` machinery already buil
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T018 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: immediately
+- [X] T018 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: immediately
       after `start()` returns (before the background thread has progressed), `run.status` is
       `STARTED` (or already `IN_PROGRESS`), `run.processed == 0`, and `run.total is None` if
       extraction has not yet completed (US2 Scenario 1) — run and observe RED
-- [ ] T019 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`, using a
+- [X] T019 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`, using a
        stub collector/orchestrator with an artificial delay per trace: while the run is partway
        through, repeatedly call `run.snapshot()` from a concurrent reader and assert each snapshot
        has a coherent status/count/progress combination (`0 <= processed <= total` once total is
        known, progress derived from those same counts), with monotonic processed counts and no
        partially-applied transition (US2 Scenario 2, FR-008) — run and observe RED
-- [ ] T020 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: once a run
+- [X] T020 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: once a run
        reaches its first terminal status via `run.wait(timeout)`, `run.start_timestamp` and
        `run.end_timestamp` are both set, and repeated `run.transition_to()` calls do not
        change `run.end_timestamp` (US2 Scenario 3, FR-003, FR-009, data-model.md's end-timestamp
        rule) — run and observe RED
-- [ ] T021 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py` asserting
+- [X] T021 [US2] Add failing unit test in `tests/unit/evaluation/test_evaluator.py` asserting
        `start()` returns before the stubbed pipeline's delivery call has been reached and
        the observer sees `run.status == DELIVERING` while delivery is blocked;
        `run.wait(short_timeout)` returns `False` and `run.end_timestamp is None` during that state,
@@ -377,7 +377,7 @@ processed, using only the US1 `Evaluator`/`EvaluationRun` machinery already buil
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Adjust `Evaluator.start()`'s background-thread body in
+- [X] T022 [US2] Adjust `Evaluator.start()`'s background-thread body in
       `deepeval_platform/evaluation/evaluator.py` so `run.transition_to(IN_PROGRESS)` is called only
       once extraction completes and `run.set_total()` makes the total known, and
       `run.increment_processed()` is called
@@ -386,7 +386,7 @@ processed, using only the US1 `Evaluator`/`EvaluationRun` machinery already buil
       synchronize through the run's state `RLock`; do not hold it while invoking collaborators
       (data-model.md State Transitions) — GREEN for T018, T019
       (depends on T017)
-- [ ] T023 [US2] Verify/adjust `end_timestamp` assignment in
+- [X] T023 [US2] Verify/adjust `end_timestamp` assignment in
        `deepeval_platform/evaluation/evaluator.py` and `evaluation_run.py` so public
        `EvaluationRun.transition_to()` sets `end_timestamp` and signals `run.wait()` exactly once, the
        first time the run reaches any terminal `RunStatus` (including `DELIVERY_FAILED`); a later
@@ -413,7 +413,7 @@ results for every non-failing trace and the failure recorded with `trace_id`/`st
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T024 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: one stub
+- [X] T024 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: one stub
        trace raises during `TraceNormalizer.normalize()` and another raises during
        `EvaluationOrchestrator.evaluate()`, while the collector reports one identified
         trace-specific extraction failure; all three are isolated into `run.errors` with the
@@ -427,25 +427,25 @@ results for every non-failing trace and the failure recorded with `trace_id`/`st
        FR-010). Use exceptions containing a bearer token and opaque credential and assert the public
        message contains a stable human-readable stage fallback with those sensitive values and raw
        exception text absent — run and observe RED
-- [ ] T025 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: a run with
+- [X] T025 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: a run with
       zero `PerTraceError`s reaches `RunStatus.COMPLETED`; a run with one or more reaches
       `RunStatus.COMPLETED_WITH_FAILURES`; assert the two are distinct enum values (US3 Scenario 2,
       FR-011) — run and observe RED
-- [ ] T026 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: a stub
+- [X] T026 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: a stub
        `TraceCollector.collect_all` that raises once yields `RunStatus.UNABLE_TO_RUN` with
        `run.end_timestamp` set, `run.wait(timeout)` returning `True`, a sanitized
         `run.failure_message`, and `run.total` staying `None`, distinguishing whole-run
         infrastructure failure from an isolated per-trace failure (Edge Cases, FR-011, research.md
         R5). Use an exception containing bearer/API-key/password/opaque credential material and
         assert raw exception text and every sensitive value are absent — run and observe RED
-- [ ] T045 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: force an
+- [X] T045 [US3] Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: force an
        unexpected non-trace-specific exception to escape the worker's planned pipeline handling;
        assert `run.wait(timeout)` returns `True`, `run.status == UNABLE_TO_RUN`,
         `run.end_timestamp` is set, and `run.failure_message` is sanitized. Include bearer/API-key/
         password/opaque credential material and assert no raw exception or sensitive value is
         exposed (FR-011) — run and
         observe RED
-- [ ] T054 [US3] Add failing unit tests in `tests/unit/evaluation/test_evaluator.py`: a returned
+- [X] T054 [US3] Add failing unit tests in `tests/unit/evaluation/test_evaluator.py`: a returned
        `EvaluationResult` containing the orchestrator's supported metric-level error details remains
        in results without a `PerTraceError`, while an orchestrator exception creates exactly one
        `evaluation_failed`; also simulate thread creation/start failure and assert the accepted run
@@ -454,7 +454,7 @@ results for every non-failing trace and the failure recorded with `trace_id`/`st
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] Implement per-trace failure isolation in the background-thread body of
+- [X] T027 [US3] Implement per-trace failure isolation in the background-thread body of
        `Evaluator.start()` (`deepeval_platform/evaluation/evaluator.py`): convert identified
        collector failures into extraction-stage `PerTraceError` entries through
        `run.append_error()`, and wrap each trace's normalize+evaluate steps in a try/except that
@@ -472,14 +472,14 @@ results for every non-failing trace and the failure recorded with `trace_id`/`st
        outcome for initial publication and retry, and let T035/T036 apply it through
        `run.complete_delivery()` only after successful publication (FR-011) — GREEN for T025
        (depends on T027)
-- [ ] T029 [US3] Implement whole-run extraction-failure handling in `Evaluator.start()`
+- [X] T029 [US3] Implement whole-run extraction-failure handling in `Evaluator.start()`
        (`deepeval_platform/evaluation/evaluator.py`): wrap `TraceCollector.collect_all()` so a setup,
        connectivity, or other non-trace-specific exception sets
        `run.set_failure_message(sanitize_error(exc))` and calls
        `run.transition_to(UNABLE_TO_RUN)`. Skip trace processing and publication entirely, ensure `run.total`
        remains `None`, and never expose raw exception or credential text (FR-011, research.md R5) —
        GREEN for T026 (depends on T017)
-- [ ] T046 [US3] Wrap the worker entrypoint in `Evaluator.start()`
+- [X] T046 [US3] Wrap the worker entrypoint in `Evaluator.start()`
        (`deepeval_platform/evaluation/evaluator.py`) with an outer `except Exception` guard for
        errors that escape planned handling: call `run.set_failure_message(sanitize_error(exc))` and
        `run.transition_to(UNABLE_TO_RUN)`. Do not catch or reclassify
@@ -502,7 +502,7 @@ independent user story of its own; it is exercised through US1/US2's existing te
 
 ### Tests ⚠️
 
-- [ ] T030 Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: a stub
+- [X] T030 Add failing unit test in `tests/unit/evaluation/test_evaluator.py`: a stub
         `ResultPublisher.publish` that observes `DELIVERING` and raises once yields
        `run.status == DELIVERY_FAILED`,
        `run.end_timestamp` set, and `run.results` exposes the completed results for read-only
@@ -510,12 +510,12 @@ independent user story of its own; it is exercised through US1/US2's existing te
        attempt a mapping mutation and mutate a nested metric result in its snapshot; assert neither
        mutation changes a fresh `run.results` snapshot — run and observe RED (Edge Cases, FR-007,
        SC-006)
-- [ ] T055 Add failing unit tests in `tests/unit/evaluation/test_evaluator.py`: successful initial
+- [X] T055 Add failing unit tests in `tests/unit/evaluation/test_evaluator.py`: successful initial
        publication and successful retry each expose no observable completed state that still retains
        the observer, proving completion plus observer release is one synchronized run-owned action;
        a zero-trace run publishes exactly one empty detached read-only mapping before reaching
        `COMPLETED` — run and observe RED (FR-007, SC-004)
-- [ ] T031 Add failing unit tests for `Evaluator.retry_delivery()` in
+- [X] T031 Add failing unit tests for `Evaluator.retry_delivery()` in
        `tests/unit/evaluation/test_evaluator.py`: retry after a stub `publish` now succeeds
        transitions to `COMPLETED`/`COMPLETED_WITH_FAILURES` per the original trace outcome, and
         `publish` was called exactly twice total with no new extraction/normalization/evaluation
@@ -525,12 +525,12 @@ independent user story of its own; it is exercised through US1/US2's existing te
        fresh snapshot containing the original canonical values, unaffected by mutations attempted
        during the failed first delivery (Edge Cases, FR-007, FR-009, SC-007) —
        run and observe RED
-- [ ] T032 Add failing unit test: `retry_delivery()` called on a `COMPLETED`/`IN_PROGRESS`/
+- [X] T032 Add failing unit test: `retry_delivery()` called on a `COMPLETED`/`IN_PROGRESS`/
       `DELIVERING`/`UNABLE_TO_RUN` run raises `InvalidRetryStateError` and leaves `run.status`
        unchanged. Capture snapshots before and after and assert status, counts, timestamps, errors,
        results, failure message, and completion signaling are unchanged (Edge Cases, FR-007) — run
        and observe RED
-- [ ] T033 Add failing unit tests for concurrent delivery retries: while one `retry_delivery()`
+- [X] T033 Add failing unit tests for concurrent delivery retries: while one `retry_delivery()`
        call is in flight for a `DELIVERY_FAILED` run, a second call raises `RetryInProgressError`
        immediately. If the active attempt fails and leaves the run `DELIVERY_FAILED`, a later retry
        may make one new publication attempt. If it succeeds and moves the run to `COMPLETED` or
@@ -539,7 +539,7 @@ independent user story of its own; it is exercised through US1/US2's existing te
 
 ### Implementation
 
-- [ ] T036 Implement `Evaluator.retry_delivery(run: EvaluationRun)` in
+- [X] T036 Implement `Evaluator.retry_delivery(run: EvaluationRun)` in
       `deepeval_platform/evaluation/evaluator.py`: call `run.begin_retry()`, which atomically
       validates `DELIVERY_FAILED` and acquires the non-blocking retry guard under the state lock,
        raising `InvalidRetryStateError` or `RetryInProgressError` itself; unpack the payload and call
@@ -563,7 +563,7 @@ implemented and tested.
 **Purpose**: Confirm the real repository → M2.1 → M2.2 → M3.1 → publisher composition test created
 RED in T037 is GREEN after the complete implementation, per plan.md's Testing strategy.
 
-- [ ] T039 Run `uv run pytest tests/integration/test_evaluator_flow_integration.py -v -rs -m
+- [X] T039 Run `uv run pytest tests/integration/test_evaluator_flow_integration.py -v -rs -m
        integration` and require the credential-free local integration test to pass with zero
        skipped tests after the completed `Evaluator` implementation. Any skip, external network
        access, or credential dependency fails this gate (depends on T036)
@@ -574,28 +574,28 @@ RED in T037 is GREEN after the complete implementation, per plan.md's Testing st
 
 **Purpose**: Final gates from quickstart.md before declaring the milestone done.
 
-- [ ] T038 [P] Run `uv run pytest tests/unit/evaluation/test_evaluation_config.py
+- [X] T038 [P] Run `uv run pytest tests/unit/evaluation/test_evaluation_config.py
       tests/unit/evaluation/test_evaluation_run.py tests/unit/evaluation/test_evaluator.py
       tests/unit/evaluation/test_evaluation_orchestrator.py
       tests/unit/evaluation/metrics/test_metric_factory.py
       tests/unit/evaluation/test_result_publisher.py tests/unit/collection/test_trace_collector.py
       tests/unit/repositories/test_trace_repository.py -v` and confirm all pass
-- [ ] T040 Run `uv run pytest --cov=deepeval_platform --cov-report=term-missing
+- [X] T040 Run `uv run pytest --cov=deepeval_platform --cov-report=term-missing
       --cov-report=json --cov-fail-under=80`, confirm aggregate coverage remains at least 80%, and
       verify each new or changed module has at least 80% coverage: `evaluation_config.py`,
       `evaluation_run.py`, `result_publisher.py`, `evaluator.py`, `evaluation_orchestrator.py`,
       `metric_factory.py`, `errors.py`, `trace_collector.py`, and `trace_repository.py`
        (Constitution Principle IV and Quality Gate 2)
-- [ ] T056 Run the feature unit and integration suites under the constitution's minimum supported
+- [X] T056 Run the feature unit and integration suites under the constitution's minimum supported
        Python 3.11 environment through the repository's `uv`/CI matrix, with no skips or syntax/
        dependency compatibility failures. Record both Python 3.11 and the development Python 3.13
        results (Constitution Technology Stack)
-- [ ] T057 Inspect `git log --reverse --name-status` and the relevant test/production diffs to
+- [X] T057 Inspect `git log --reverse --name-status` and the relevant test/production diffs to
        verify durable RED-before-GREEN evidence for every production task. Record the evidence in
        research.md's post-implementation gate status; if history does not prove a test preceded its
        implementation, the TDD gate fails and the feature MUST NOT be declared complete
        (Constitution Principle IV and Quality Gate 1)
-- [ ] T048 Run `uv run detect-secrets scan --all-files` if `detect-secrets` is already available in
+- [X] T048 Run `uv run detect-secrets scan --all-files` if `detect-secrets` is already available in
        the project; otherwise run `git diff --check` plus `rg -n -i
        '(api[_-]?key|secret|token|password|bearer)\s*[:=]\s*["'"'][^"'"']+["'"']|https?://(?!127\.0\.0\.1|localhost)'
        deepeval_platform/evaluation deepeval_platform/collection deepeval_platform/repositories
@@ -604,7 +604,7 @@ RED in T037 is GREEN after the complete implementation, per plan.md's Testing st
        value, non-local environment-specific host, or sensitive exception text is present and all
        configuration access continues through `ConfigManager` (Constitution Principle V and Quality
        Gate 3)
-- [ ] T041 Update research.md's "Post-implementation gate status" section (currently "Not yet
+- [X] T041 Update research.md's "Post-implementation gate status" section (currently "Not yet
       started") to record actual pass/fail status per the M4.1 precedent. Explicitly reconfirm that
       implementation preserved the documented DeepEval-first boundary: native metrics perform all
       scoring and `Evaluator` contains only the lifecycle capabilities identified as absent from
