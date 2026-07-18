@@ -38,7 +38,12 @@ class EvaluationOrchestrator:
         self._resolver = resolver if resolver is not None else BotMetricConfigResolver()
 
     async def evaluate(
-        self, trace: NormalizedTrace, bot_id: str, metric_names: list[str]
+        self,
+        trace: NormalizedTrace,
+        bot_id: str,
+        metric_names: list[str],
+        *,
+        thresholds: dict[str, float] | None = None,
     ) -> EvaluationResult:
         if not metric_names:
             raise EmptyMetricListError()
@@ -52,7 +57,9 @@ class EvaluationOrchestrator:
             raise UnknownMetricError(unknown, supported=sorted(MetricFactory._registry))
 
         try:
-            thresholds = self._resolve_thresholds(bot_id, metric_names)
+            resolved_thresholds = (
+                thresholds if thresholds is not None else self._resolve_thresholds(bot_id, metric_names)
+            )
             timeouts = self._resolve_timeouts(metric_names)
             judge = self._resolve_judge()
         except (InvalidThresholdError, InvalidTimeoutError):
@@ -60,11 +67,13 @@ class EvaluationOrchestrator:
         except Exception as exc:
             raise ConfigResolutionError(bot_id, exc) from exc
 
-        context = EvaluationContext(trace=trace, thresholds=thresholds)
+        context = EvaluationContext(trace=trace, thresholds=resolved_thresholds)
 
         results = await asyncio.gather(
             *(
-                self._measure_one(bot_id, name, thresholds[name], timeouts[name], judge, context)
+                self._measure_one(
+                    bot_id, name, resolved_thresholds[name], timeouts[name], judge, context
+                )
                 for name in metric_names
             )
         )

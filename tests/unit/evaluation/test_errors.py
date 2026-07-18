@@ -8,13 +8,18 @@ import pytest
 
 from deepeval_platform.evaluation.errors import (
     ConfigResolutionError,
+    DuplicateMetricError,
     DuplicateMetricNameError,
     DuplicateMetricRequestError,
     EmptyMetricListError,
     ErrorDetail,
     EvaluationOrchestratorError,
+    InvalidPeriodError,
+    InvalidRetryStateError,
     InvalidThresholdError,
     InvalidTimeoutError,
+    RetryInProgressError,
+    UnknownBotError,
     UnknownMetricError,
     sanitize_error,
 )
@@ -130,6 +135,67 @@ class TestConfigResolutionError:
         assert "test_rag_bot" in str(error)
         assert error.bot_id == "test_rag_bot"
         assert error.__cause__ is original or error.original is original
+
+
+class TestUnknownBotError:
+    def test_is_orchestrator_error(self):
+        assert issubclass(UnknownBotError, EvaluationOrchestratorError)
+
+    def test_message_and_attribute_carry_bot_id(self):
+        error = UnknownBotError("nonexistent_bot")
+        assert error.bot_id == "nonexistent_bot"
+        assert "nonexistent_bot" in str(error)
+
+
+class TestInvalidPeriodError:
+    def test_is_orchestrator_error(self):
+        assert issubclass(InvalidPeriodError, EvaluationOrchestratorError)
+
+    def test_message_and_attributes_carry_both_boundaries(self):
+        from datetime import datetime, timezone
+
+        start = datetime(2026, 7, 8, tzinfo=timezone.utc)
+        end = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        error = InvalidPeriodError(start, end)
+        assert error.period_start == start
+        assert error.period_end == end
+        message = str(error)
+        assert start.isoformat() in message
+        assert end.isoformat() in message
+
+
+class TestInvalidRetryStateError:
+    def test_is_orchestrator_error(self):
+        assert issubclass(InvalidRetryStateError, EvaluationOrchestratorError)
+
+    def test_message_and_attributes_carry_run_id_and_status(self):
+        error = InvalidRetryStateError("run-123", "completed")
+        assert error.run_id == "run-123"
+        assert error.status == "completed"
+        message = str(error)
+        assert "run-123" in message
+        assert "completed" in message
+
+
+class TestRetryInProgressError:
+    def test_is_orchestrator_error(self):
+        assert issubclass(RetryInProgressError, EvaluationOrchestratorError)
+
+    def test_message_and_attribute_carry_run_id(self):
+        error = RetryInProgressError("run-456")
+        assert error.run_id == "run-456"
+        assert "run-456" in str(error)
+
+
+class TestDuplicateMetricError:
+    def test_is_orchestrator_error(self):
+        assert issubclass(DuplicateMetricError, EvaluationOrchestratorError)
+
+    def test_message_lists_all_duplicates(self):
+        error = DuplicateMetricError(["faithfulness", "faithfulness"])
+        message = str(error)
+        assert "faithfulness" in message
+        assert error.duplicates == ["faithfulness", "faithfulness"]
 
 
 class TestSanitizeError:

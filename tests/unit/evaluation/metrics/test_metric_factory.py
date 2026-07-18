@@ -113,3 +113,18 @@ class TestMetricFactoryCreate:
         )
 
         assert isinstance(result, _DummyMetricA)
+
+
+class TestMetricFactoryIsRegistered:
+    def test_registered_name_returns_true(self):
+        MetricFactory.register("dummy_is_registered_test")(_DummyMetricA)
+        assert MetricFactory.is_registered("dummy_is_registered_test") is True
+
+    def test_unknown_name_returns_false(self):
+        assert MetricFactory.is_registered("definitely_not_registered") is False
+
+    def test_does_not_require_registry_access(self):
+        MetricFactory.register("dummy_is_registered_public_test")(_DummyMetricA)
+        # Public query only — callers must not need `MetricFactory._registry` directly.
+        assert MetricFactory.is_registered("dummy_is_registered_public_test") is True
+        assert MetricFactory.is_registered("still_unknown") is False
