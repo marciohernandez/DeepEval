@@ -180,12 +180,14 @@ config schema, no new runtime dependency.
 | I. OOP-First | `EvaluationConfig` (passive value object), `EvaluationRun`/`RunStatus`/`PerTraceError` (run state), `ResultPublisher`/`ResultObserver` (publication), and `Evaluator` (orchestration only, delegates extraction/normalization/evaluation to their existing owners) each have one responsibility; no new monolithic file. | PASS |
 | II. DeepEval-First | Official documentation and the installed DeepEval 4.0.7 API were reviewed (research.md, "DeepEval-first native capability review"). Native `evaluate()`/`AsyncConfig`/`ErrorConfig` cover completed test-case batch execution, concurrency, and evaluation-error policy, but not external trace extraction/normalization, an immediate live run handle, stage-aware progress/failures, observer publication, or delivery-only retry. `Evaluator` therefore remains a project-local lifecycle adapter and delegates all scoring to the already-native-backed M3.1 `EvaluationOrchestrator`; it does not reimplement metric measurement. | PASS |
 | III. LangChain-First | Not applicable — this milestone orchestrates the evaluator's own pipeline, not a bot-under-evaluation integration (explicit scope boundary in Principle III). | N/A |
-| IV. TDD | Every new class/behavior gets a test written and observed RED before its implementation; coverage stays >=80% and the final gate verifies RED-before-GREEN evidence in commit history (quickstart.md enumerates the required scenarios). | PASS (process gate, verified at implementation) |
+| IV. TDD | Every new class/behavior gets a test written and observed RED before its implementation; coverage stays >=80% and the final gate verifies RED-before-GREEN evidence (quickstart.md enumerates the required scenarios). Actual evidence took the form constitution v2.1.0 Gate 1(b) describes: commits landed at phase granularity rather than per-task, so ordering isn't reconstructable from `git log` alone; research.md's T057 audit note is the canonical record of live RED→GREEN verification during the session — see research.md:385-397. | PASS (process gate; evidence per Gate 1(b), not commit history — see research.md T057) |
 | V. Zero Hardcode | No new credential/config value; the one config read (`bots.{bot_id}.bot_type`) goes through `ConfigManager`, the sole reader. | PASS |
 | VI. Extensibility | `ResultPublisher` is injected (constructor parameter) and delivers each run only to its requester-supplied `ResultObserver`. Adding an output target requires only a new observer supplied when starting a run, with zero `Evaluator` changes, satisfying the constitution's mandatory Observer application for evaluation results. | PASS |
 
-No design-pattern exception is requested. Constitution v2.0.0 is in force. All principle checks
-pass; no implementation blocker remains.
+No design-pattern exception is requested. Constitution v2.0.0 was in force at plan time; v2.1.0
+(2026-07-20) later amended Gate 1's evidence wording and the Core runtime version in response to
+this feature's own research.md T056/T057 findings — see constitution.md Sync Impact Report. All
+principle checks pass; no implementation blocker remains.
 
 ## Project Structure
 

@@ -131,7 +131,7 @@ capability required.
 - [X] T007 [US1] After T012/T014/T034/T050 make the public collaborator and model contracts
         importable, add failing unit tests for `Evaluator.start()` pre-condition validation in
         `tests/unit/evaluation/test_evaluator.py`: empty `metric_thresholds` → `EmptyMetricListError`,
-        unregistered metric → `UnknownMetricError`; each invalid threshold class (below zero, above
+        unregistered metric → `UnknownMetricError` (FR-014); each invalid threshold class (below zero, above
        one, `NaN`, either infinity, boolean, numeric string, and arbitrary object) →
        `InvalidThresholdError`; exact integer/float boundaries `0` and `1` are accepted and become
        floats only in the validated internal mapping;
@@ -151,7 +151,7 @@ capability required.
        receives only its run's `(run, results)` through `ResultPublisher.publish`, observes
        `run.status == DELIVERING` inside that callback, and delivery succeeds →
        `run.status == COMPLETED`, `run.processed == N`,
-      `run.total == N`, `run.end_timestamp` set once — run and observe RED (depends on T007 in the
+      `run.total == N`, `run.end_timestamp` set once (FR-005) — run and observe RED (depends on T007 in the
       same file)
 - [X] T009 [US1] Add failing unit test for zero-trace period in
       `tests/unit/evaluation/test_evaluator.py`: stubbed `TraceCollector.collect_all()` returns an
@@ -295,7 +295,7 @@ capability required.
         `TraceRepository`. Validate the submitted `metric_thresholds`
        entry list is non-empty, every entry is an actual `MetricThreshold`, every entry name is
        unique, every name is known through the public
-       `MetricFactory.is_registered(name)` query,
+       `MetricFactory.is_registered(name)` query (FR-014),
        and every entry threshold is an `int`/`float` excluding `bool`, finite according to
        `math.isfinite(float(value))`, and in `[0.0, 1.0]`. Do not coerce strings. Only after every
        entry passes all checks, build the internal `dict[str, float]` threshold mapping with
@@ -310,7 +310,7 @@ capability required.
          `EvaluationRun` with the requester-supplied observer accepted as a constructor argument and
           retained in private backing state, then spawn a daemon
           `threading.Thread` whose worker calls `TraceCollector.collect_all()` and never capped `collect()`,
-       then per trace calls `TraceNormalizer.normalize()` and
+       then per trace calls `TraceNormalizer.normalize()` (FR-005) and
        `asyncio.run(EvaluationOrchestrator.evaluate(..., thresholds=validated_thresholds))`,
           accumulating `results` and retaining them on the run for T035's initial publication;
          use public progress/error methods for all state updates. If thread creation/start fails

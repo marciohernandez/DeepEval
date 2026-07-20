@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 Python project named `deepeval-platform` (source package: `deepeval_platform/`), scaffolded with
-`uv`. Python 3.13 pinned (`.python-version`), minimum runtime `^3.11` per constitution.
+`uv`. Python 3.13 pinned (`.python-version`), minimum runtime `^3.13` per constitution (raised from
+`^3.11` in constitution v2.1.0 to match `pyproject.toml`'s `requires-python = ">=3.13"`).
 
 **Naming note**: the source package is `deepeval_platform/`, NOT `deepeval/`. It was renamed on
 2026-07-09 (post-M2.1) because a top-level `deepeval/` directory shadowed the installed `deepeval`

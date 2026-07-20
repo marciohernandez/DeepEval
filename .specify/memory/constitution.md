@@ -1,28 +1,45 @@
 <!--
 SYNC IMPACT REPORT
 ==================
- Version change: 1.4.0 -> 2.0.0
- Bump type: MAJOR (Principle VI's ResultPublisher requirement is redefined so concrete output
- destinations are delivered by their own scoped features rather than all at once)
+ Version change: 2.0.0 -> 2.1.0
+ Bump type: MINOR (Technology Stack substitution requires MINOR minimum per Governance §Technology
+ Stack; combined with a Gate 1 evidence-definition clarification that alone would be PATCH)
+
+Triggered by: /speckit-analyze findings C1 and C2 on feature 009-evaluator-principal
+ (research.md T056, T057), remediated per user request.
 
 Added sections: N/A
 
 Modified sections:
-  - Principle VI / Observer: ResultPublisher remains mandatory, but concrete Langfuse, CSV,
-    Qdrant, and Dashboard observers are required only in the feature that introduces each
-    destination. A result-producing feature may deliver the extensible publisher contract alone.
-  - Quality Gates / Pattern compliance: export-target checks now require an Observer extension
-    without Evaluator changes, rather than all output targets in every feature.
+  - Technology Stack / Core runtime: `Python ^3.11` -> `Python ^3.13`, to match the actual binding
+    constraint already in force in `pyproject.toml` (`>=3.13`, since commit e8deaa6, 2026-06-22)
+    and `.python-version` (`3.13`). The prior `^3.11` floor was aspirational and unsatisfiable:
+    `uv sync --python 3.11` is refused by `uv` under the current `pyproject.toml`, and the full
+    test suite has only ever been verified GREEN on Python 3.13.13.
+  - Quality Gates / Gate 1 (TDD compliance): evidence requirement widened from "evident in commit
+    history" (only) to accept either fine-grained commit history OR, for phase/feature-granularity
+    commit workflows, a documented per-task RED/GREEN audit note (as produced in
+    specs/009-evaluator-principal/research.md T057). The substantive TDD requirement (tests before
+    code, RED before GREEN, Principle IV) is unchanged — only what counts as acceptable *evidence*
+    of compliance was relaxed.
+  - Quality Gates / Gate 8: "TDD commit-history requirement of Gate 1" reworded to "TDD evidence
+    requirement of Gate 1" for consistency with the Gate 1 change above.
 
 Removed sections: N/A
 
 Templates reviewed:
-  - OK: .specify/templates/plan-template.md
-  - OK: .specify/templates/spec-template.md
-  - OK: .specify/templates/tasks-template.md
+  - OK: .specify/templates/plan-template.md (generic placeholder example, e.g. "Python 3.11,
+    Swift 5.9" — not a reference to this project's binding version; no change needed)
+  - OK: .specify/templates/spec-template.md (no version or Gate 1 references)
+  - OK: .specify/templates/tasks-template.md (no version or Gate 1 references)
   - OK: .specify/templates/commands/ (directory does not exist)
-  - OK: README.md
-  - OK: CLAUDE.md
+  - Updated: CLAUDE.md (Project section: "minimum runtime `^3.11` per constitution" -> `^3.13`)
+  - Updated: tech_stack.md (§ Python row + changelog entry: `^3.11` (mínimo) -> `^3.13`)
+  - Not updated (intentional): specs/*/plan.md and specs/*/spec.md across features 001-009, and
+    specs/009-evaluator-principal/research.md — these are point-in-time milestone artifacts that
+    recorded the constitution's `^3.11` statement as it stood *at the time each was written*.
+    Rewriting them would misrepresent project history; research.md's T056 finding is precisely the
+    audit trail that motivated this amendment and must stay as originally recorded.
 
 Follow-up TODOs: N/A
 -->
@@ -173,7 +190,10 @@ alternatives — they occupy different layers and are never a choice between one
   evaluated*. Governed by Principle III (LangChain-First), scoped strictly to bot
   orchestration/integration code — never to the evaluator's own architecture.
 
-**Core runtime**: Python `^3.11`, managed with `uv`
+**Core runtime**: Python `^3.13`, managed with `uv`. `pyproject.toml` (`requires-python = ">=3.13"`,
+set 2026-06-22) and `.python-version` (`3.13`) are the binding source of truth; this supersedes the
+`^3.11` floor stated in constitution versions prior to 2.1.0, which the repository could not
+actually satisfy (`uv sync --python 3.11` is refused under the current `pyproject.toml`).
 
 **Evaluation framework (PRIMARY)**: DeepEval `^4.0.6` — all metrics, Synthesizer,
 ConversationSimulator, PromptOptimizer (GEPA / MIPROv2)
@@ -244,8 +264,15 @@ regardless of how many organisations are actually deployed.
 
 Every feature MUST pass all applicable gates before being considered complete:
 
-1. **TDD compliance** — Tests were written before production code; RED→GREEN→REFACTOR cycle
-   is evident in commit history.
+1. **TDD compliance** — Tests were written before production code, following the RED→GREEN→REFACTOR
+   cycle (Principle IV). This MUST be evidenced by at least one of:
+   (a) fine-grained commit history showing test-then-implementation ordering, where that commit
+   granularity is used; or
+   (b) for phase/feature-granularity commits, a documented audit note (e.g. in the feature's
+   `research.md`) affirmatively recording, per task, that the test was written, run, observed to
+   fail (RED), and then made to pass (GREEN) via live test runs during the implementation session.
+   An unsubstantiated claim of having followed TDD, with neither form of evidence present, does
+   NOT satisfy this gate.
 2. **Coverage** — `pytest-cov` reports ≥ 80% for all new and changed modules.
 3. **Zero hardcode** — Grep for hardcoded credentials returns empty on all new/changed files.
 4. **Pattern compliance** — New bots, metrics, and providers are added as subclasses only.
@@ -265,7 +292,7 @@ Every feature MUST pass all applicable gates before being considered complete:
    includes `org_id` as a nullable column. Every database schema change MUST be committed as a
    versioned SQL migration file in `migrations/` (e.g., `001_evaluation_results.sql`); no schema
    may be applied via manual editor operations — manual steps are untrackable, unreproducible in
-   CI, and violate the TDD commit-history requirement of Gate 1.
+   CI, and violate the TDD evidence requirement of Gate 1.
 9. **Authentication and RLS** — User-scoped persistence flows MUST validate the Supabase Auth
    access token, derive `org_id` from trusted identity claims, and execute through a user-scoped
    client subject to RLS. Accepting an arbitrary caller-provided `org_id` is not authorization.
@@ -299,4 +326,4 @@ reference to the violated principle and why no simpler path exists.
 
 **Runtime guidance**: See `CLAUDE.md` for agent-specific runtime instructions.
 
-**Version**: 2.0.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-17
+**Version**: 2.1.0 | **Ratified**: 2026-06-19 | **Last Amended**: 2026-07-20

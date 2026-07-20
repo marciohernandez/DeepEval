@@ -2,8 +2,10 @@
 
 **Projeto:** DeepEval Chatbot Evaluator  
 **Data:** 2026-06-19  
-**Versão do documento:** 1.2 (auditoria de alinhamento com `briefing.md` e `.specify/memory/constitution.md`)  
+**Versão do documento:** 1.3 (correção do piso mínimo de Python após achado crítico do `/speckit-analyze`)  
 
+> **Changelog v1.3:** `/speckit-analyze` na feature 009-evaluator-principal apontou que o piso `^3.11` documentado aqui e na constitution nunca foi de fato satisfazível: `pyproject.toml` fixa `requires-python = ">=3.13"` desde 2026-06-22 (commit `e8deaa6`), e `uv sync --python 3.11` é recusado pelo próprio `uv`. A constitution foi emendada para v2.1.0 elevando o piso mínimo para `^3.13`; este documento (§1 e §2.1) foi atualizado para acompanhar.
+>
 > **Changelog v1.1:** Documento revisado após a conclusão do M1, com base nos artefatos reais do spec-kit (`plan.md`, `research.md`, `data-model.md`) e no `pyproject.toml` do repositório. Três correções principais: (1) estrutura de pastas do código-fonte adicionada à seção 5 — antes só existia nos artefatos do milestone; (2) OpenRouter passa a usar integração dedicada do LangChain em vez do workaround via `base_url`; (3) Qdrant passa a usar `langchain-qdrant` como dependência direta, com `qdrant-client` como transitiva. Mudanças marcadas com 🔄 ao longo do documento.
 
 > **Changelog v1.2:** Auditoria de consistência entre `briefing.md`, `tech_stack.md` e a constitution. Duas correções internas: (1) §5.1 ainda mostrava a árvore de pastas pré-M2.1 (`base.py` "implementa DeepEvalBaseLLM", providers "wraps ChatOpenAI/ChatAnthropic/ChatOpenRouter") mesmo depois de §2.8 já documentar a correção — agora ambas as seções concordam; (2) §6 tinha uma entrada de `TokenUsage` desatualizada, já resolvida em detalhe em §2.8. Além disso, a constitution (`.specify/memory/constitution.md`) foi emendada para v1.3.0 para refletir as substituições de Qdrant (`langchain-qdrant` como dependência direta) e Langfuse SDK (`>=4.13.0` + breaking change do `trace()`) que este documento já registrava como validadas no M1 mas que nunca haviam sido propagadas de volta à seção "Technology Stack" (binding) da constitution.
@@ -34,7 +36,7 @@
 │   Supabase (relacional) · Qdrant (vetorial) · CSV        │
 ├──────────────────────────────────────────────────────────┤
 │                    INFRAESTRUTURA                        │
-│      Python 3.11+ (3.13 pinned) · Docker · APScheduler   │
+│      Python 3.13+ (3.13 pinned) · Docker · APScheduler   │
 │      python-dotenv · PyYAML · pytest                     │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -47,7 +49,7 @@
 
 | Tecnologia | Versão | Justificativa |
 |-----------|--------|---------------|
-| **Python** | `^3.11` (mínimo) — `3.13` pinado via `.python-version` 🔄 | Suportado por todas as libs do projeto; tipagem moderna com `match/case` e `TypeAlias`. O M1 fixou `3.13` no ambiente de desenvolvimento local (`uv`), mantendo `^3.11` como piso mínimo de compatibilidade. |
+| **Python** | `^3.13` (mínimo) — `3.13` pinado via `.python-version` 🔄 | Suportado por todas as libs do projeto; tipagem moderna com `match/case` e `TypeAlias`. `pyproject.toml` fixa `requires-python = ">=3.13"` desde 2026-06-22 (commit `e8deaa6`), o que já tornava `^3.11` inatingível na prática (`uv sync --python 3.11` é recusado pelo próprio `uv`); a constitution v2.1.0 elevou o piso mínimo para `^3.13` para refletir essa restrição real. |
 
 ---
 
